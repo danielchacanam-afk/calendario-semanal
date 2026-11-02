@@ -19,6 +19,7 @@ function backup(){try{if(uid)native.setItem('calendario-respaldo:'+uid,JSON.stri
 function refresh(){window.dispatchEvent(new Event('calendar-cloud-update'))}
 function fail(message){blocked=true;lock(true);backup();try{native.setItem('calendario-recuperacion:'+uid+':'+Date.now(),JSON.stringify(state))}catch{}$('cloud-reload').hidden=false;status(message+' Se conservó una copia local; puedes descargarla antes de recargar.',true)}
 window.calendarStorage={
+ keys(){return Object.keys(state)},
  getItem(key){return Object.hasOwn(state,key)?state[key]:null},
  setItem(key,value){
   if(!ready||blocked||!navigator.onLine)throw Error('No hay conexión de sincronización');
