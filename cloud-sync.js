@@ -7,7 +7,7 @@ const auth=getAuth(app),db=getFirestore(app),$=id=>document.getElementById(id);
 const native=window.localStorage;
 const validKey=k=>/^calendario-semanal:(conceptos-personalizados:v1|eliminados:v1|presupuestos:v1|gastos:v1:\d{4}-\d{2}|registros:v1:\d{4}-\d{2})$/.test(k);
 let state=Object.create(null),revision=0,ref=null,uid=null,ready=false,dirty=false,saving=false,blocked=false,started=false,stop=null,timer=null,generation=0;
-const status=(message,error=false)=>{$('cloud-status').textContent=message;$('cloud-status').style.color=error?'#b42424':'#496480'};
+const status=(message,error=false)=>{if(error&&$('cloud-options'))$('cloud-options').open=true;$('cloud-status').textContent=message;$('cloud-status').style.color=error?'#b42424':'#496480'};
 function lock(value){$('calendar-fields').inert=value;$('calendar-fields').style.opacity=value?'.55':'1'}
 function decode(payload){
  const value=JSON.parse(payload),out=Object.create(null);
@@ -83,6 +83,7 @@ window.addEventListener('offline',()=>{lock(true);status('Sin conexión. Reconec
 window.addEventListener('online',()=>{if(ready&&!blocked){lock(false);status('Conectado');flush()}});
 onAuthStateChanged(auth,async user=>{
  const epoch=++generation;if(stop)stop();ready=false;ref=null;lock(true);
+ if($('cloud-options'))$('cloud-options').open=!user;
  $('cloud-login').hidden=!!user;$('cloud-account').hidden=!user;$('calendar-fields').hidden=!user;
  if(!user){status('Inicia sesión para sincronizar tus dispositivos.');return}
  uid=user.uid;ref=doc(db,'users',uid,'state','calendar');status('Cargando tus datos…');
