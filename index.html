@@ -170,7 +170,7 @@
         </form>
         <p id="cartola-error" role="alert"></p>
       </div>
-      <div class="total-bar expense-total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
+      <div class="total-bar expense-total-bar"><strong>Gastos ingresados</strong><output id="total" class="total-number" aria-label="Gastos ingresados">$0</output></div>
       <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
     </section>
 
@@ -598,7 +598,7 @@
 let total=0n;
       for(const records of Object.values(entries))for(const record of records)total+=BigInt(record.amount);
       for(const name of allNames())if(visible(name)&&amounts[name])total+=BigInt(amounts[name]);$('total').textContent='$'+fmt(total.toString());renderCartola(total);
-      const remainingBudget=totalBudget;
+      const remainingBudget=totalBudget-total;
       $('budget-total').textContent=(remainingBudget<0n?'- $':'$')+fmt((remainingBudget<0n?-remainingBudget:remainingBudget).toString());
     }
     function weeksInMonth(year,month){
