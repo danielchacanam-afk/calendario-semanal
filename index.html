@@ -120,6 +120,19 @@
     .parts-panel{border:1px solid #dce4ec;border-radius:9px;padding:10px;background:#f6f8fb;font-size:12px;grid-column:1 / -1}.parts-panel>strong{display:block;margin-bottom:8px}
     .part-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;gap:4px;margin:7px 0}.part-add{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
     .part-row input{min-width:0;width:100%;padding:7px 4px;border:1px solid #cfd9e3;border-radius:6px;background:#fff;font-size:12px}.part-row button{padding:4px;border:1px solid #dce4ec;border-radius:5px;background:white;min-height:32px;cursor:pointer}.part-save{color:#15803d}.part-delete{color:#c42020}.parts-note{font-size:11px;color:#64768a}
+
+    .budget-input{width:112px;text-align:right}.total-number{min-width:180px;text-align:right;font-size:28px}.week-total{min-width:105px;text-align:right}.amount,.movement-amount,.record-amount{font-variant-numeric:tabular-nums}.record-amount{text-align:right;width:100%}
+    .delete-item,.item-agenda,.budget-save,.budget-cancel,.part-row button,.category-rename-form button{min-width:44px;min-height:44px;display:inline-flex;align-items:center;justify-content:center}.delete-item[hidden],.item-agenda[hidden]{display:none}
+    .category-edit{border:0;background:none;color:#64768a;min-width:36px;min-height:36px;cursor:pointer;font-size:18px}.category-title{flex-basis:calc(100% - 88px)}.category-header{gap:4px}
+    .budget-consumption{appearance:none;border:0;width:100%;height:4px;border-radius:5px;overflow:hidden;background:#e8edf3;accent-color:var(--bar-color,#2767a8);grid-column:1 / -1}.budget-consumption::-webkit-progress-bar{background:#e8edf3}.budget-consumption::-webkit-progress-value{background:var(--bar-color,#2767a8)}.budget-consumption::-moz-progress-bar{background:var(--bar-color,#2767a8)}
+    .mobile-add-expense{display:none}.register-expense{font-size:11px;font-weight:600}.category{align-self:start}.category-title-button{width:100%}
+    .week{display:block;padding:0}.week-summary{display:flex;align-items:center;gap:12px;padding:15px;cursor:pointer;list-style:none}.week-summary::-webkit-details-marker{display:none}.week-summary::after{content:'⌄';color:#64768a}.week[open] .week-summary::after{content:'⌃'}.week-movements{padding:0 15px 14px;border-top:1px solid #dce4ec}.week-included{font-size:12px;color:#64768a}.week-movement{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #e8edf3;font-size:13px}.movement-meta{display:block;font-size:11px;color:#64768a;margin-top:3px}.movement-amount{white-space:nowrap;color:#c42020;text-align:right}.week-badge{display:block;margin-top:3px}.week-total{font-size:21px}
+    @media(max-width:570px){
+      .category[data-open="false"]>.category-fields,.category[data-open="false"]>.new-expense-form,.category[data-open="false"] .add-concept,.category[data-open="false"] .category-edit,.category[data-open="false"] .category-rename-form{display:none!important}
+      .category[data-open="false"] .category-header{margin:0;min-height:44px}.category[data-open="false"] .category-title{flex-basis:100%;margin:0}.category-title-button{min-height:44px;display:flex;align-items:center;justify-content:space-between}.category-title-button::after{content:'⌄';font-size:18px;margin-left:10px}.category[data-open="true"] .category-title-button::after{content:'⌃'}
+      .mobile-add-expense{display:block;align-self:flex-start;background:none;border:0;color:#2767a8;font-size:12px;min-height:38px;padding:4px 0;cursor:pointer}.expense:not(.entry-open)>.amount-wrap{display:none}.expense.entry-open>.mobile-add-expense{display:none}.category-fields{gap:20px}
+      .total-number{min-width:140px;font-size:26px}.budget-input{font-size:15px;width:120px}.week-summary{gap:9px;padding:12px}.week-total{font-size:20px;min-width:90px}.week-num{width:36px;height:36px;flex-basis:36px}.category{padding:10px 14px}
+    }
   </style>
 </head>
 <body>
@@ -381,13 +394,18 @@
       const budgetActions=document.createElement('div');budgetActions.className='budget-actions';budgetActions.hidden=true;
       const confirmBudget=document.createElement('button');confirmBudget.type='button';confirmBudget.className='budget-save';confirmBudget.textContent='✓';confirmBudget.setAttribute('aria-label',`Guardar presupuesto de ${item}`);
       const cancelBudget=document.createElement('button');cancelBudget.type='button';cancelBudget.className='budget-cancel';cancelBudget.textContent='×';cancelBudget.setAttribute('aria-label','Cancelar cambio de presupuesto');
+      const consumption=document.createElement('progress');consumption.className='budget-consumption';consumption.max=100;consumption.setAttribute('aria-label',`Consumo del presupuesto de ${item}`);
       let editingBudget=false;
       function renderBudget(){
         if(editingBudget)return;
         const original=budgetFor(item);
+        consumption.hidden=original===null;
         if(original===null){budgetInput.value='';budgetInput.style.color='#64768a';return}
         const spent=(entries[item]||[]).reduce((sum,value)=>sum+BigInt(value.amount),0n);
         const remaining=BigInt(original)-spent;
+        consumption.value=BigInt(original)>0n?Math.min(100,Number(spent*100n/BigInt(original))):(spent>0n?100:0);
+        consumption.title=`Gastado $${fmt(spent.toString())} de $${fmt(original)}`;
+        consumption.style.setProperty('--bar-color',consumption.value>=100?'#c42020':consumption.value>=75?'#b77900':'#2767a8');
         budgetInput.value=(remaining<0n?'- $':'$')+fmt((remaining<0n?-remaining:remaining).toString());
         const ratio=BigInt(original)>0n?Math.max(0,Math.min(100,Number(remaining*100n/BigInt(original)))):0;
         budgetInput.style.color=ratio>50?`hsl(${40+(ratio-50)*1.6}, 85%, 28%)`:`hsl(${ratio*.8}, 85%, 35%)`;
@@ -433,6 +451,9 @@
       const wrap=document.createElement('div');wrap.className='amount-wrap';
       const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
       const input=document.createElement('input');input.className='amount';input.id=id;input.type='text';input.inputMode='numeric';input.autocomplete='off';input.spellcheck=false;input.maxLength=24;input.setAttribute('aria-label',item);input.value=fmt(amounts[item]||'');
+      const mobileAdd=document.createElement('button');mobileAdd.type='button';mobileAdd.className='mobile-add-expense';mobileAdd.textContent='+ Agregar egreso';mobileAdd.setAttribute('aria-expanded','false');
+      if(input.value){div.classList.add('entry-open');mobileAdd.setAttribute('aria-expanded','true')}
+      mobileAdd.addEventListener('click',()=>{const open=!div.classList.contains('entry-open');div.classList.toggle('entry-open',open);mobileAdd.setAttribute('aria-expanded',String(open));if(open)input.focus()});
       input.enterKeyHint='done';
       const register=document.createElement('button');register.type='button';register.className='register-expense';register.textContent='Registrar';register.setAttribute('aria-label',`Registrar gasto en ${item}`);
       function updateRegister(){const digits=clean(input.value);register.disabled=!digits||BigInt(digits)===0n}
@@ -443,7 +464,7 @@
         const day=Math.min(now.getDate(),new Date(view.year,view.month+1,0).getDate());
         const recordedDate=ym(view.year,view.month)+'-'+String(day).padStart(2,'0');
         if(recordAmount(item,digits,recordedDate)){
-          input.value='';updateRegister();renderRecords();renderBudget();renderTotal();renderWeeks();
+          input.value='';div.classList.remove('entry-open');mobileAdd.setAttribute('aria-expanded','false');updateRegister();renderRecords();renderBudget();renderTotal();renderWeeks();
           if(closeKeyboard)input.blur();
         }
       }
@@ -481,12 +502,14 @@
         });
       }
       renderRecords();
-      wrap.append(prefix,input,register);div.append(heading,wrap,records,partsPanel);container.append(div);
+      wrap.append(prefix,input,register);div.append(heading,consumption,mobileAdd,wrap,records,partsPanel);container.append(div);
     }
+    const expandedCategories=new Set(),expandedWeeks=new Set();
+    const mobileLayout=()=>window.matchMedia('(max-width:570px)').matches;
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
       for(const category of CATEGORIES){
-        const card=document.createElement('section');card.className='category';card.setAttribute('aria-label',displayCategory(category));
+        const card=document.createElement('section');card.className='category';card.setAttribute('aria-label',displayCategory(category));card.dataset.open=String(expandedCategories.has(category.name));
         const head=document.createElement('div');head.className='category-header';
         const title=document.createElement('h3');title.className='category-title';
         const titleButton=document.createElement('button');titleButton.type='button';titleButton.className='category-title-button';titleButton.textContent=displayCategory(category);titleButton.setAttribute('aria-label',`Modificar nombre de ${displayCategory(category)}`);titleButton.setAttribute('aria-expanded','false');title.append(titleButton);
@@ -497,7 +520,10 @@
         const renameError=document.createElement('p');renameError.className='new-expense-error';renameError.setAttribute('role','alert');
         renameForm.append(renameInput,renameSave,renameCancel,renameError);
         function closeRename(){renameForm.hidden=true;titleButton.setAttribute('aria-expanded','false');titleButton.focus()}
-        titleButton.addEventListener('click',()=>{renameForm.hidden=false;renameInput.value=displayCategory(category);renameError.textContent='';titleButton.setAttribute('aria-expanded','true');renameInput.focus();renameInput.select()});
+        function editCategory(){renameForm.hidden=false;renameInput.value=displayCategory(category);renameError.textContent='';renameInput.focus();renameInput.select()}
+        const edit=document.createElement('button');edit.type='button';edit.className='category-edit';edit.textContent='✎';edit.setAttribute('aria-label',`Modificar nombre de ${displayCategory(category)}`);edit.addEventListener('click',editCategory);
+        if(mobileLayout()){titleButton.setAttribute('aria-label',`Mostrar ítems de ${displayCategory(category)}`);titleButton.setAttribute('aria-expanded',card.dataset.open)}
+        titleButton.addEventListener('click',()=>{if(!mobileLayout()){editCategory();return}const open=card.dataset.open!=='true';card.dataset.open=String(open);if(open)expandedCategories.add(category.name);else expandedCategories.delete(category.name);titleButton.setAttribute('aria-expanded',String(open))});
         renameCancel.addEventListener('click',closeRename);
         renameInput.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeRename()}});
         renameForm.addEventListener('submit',event=>{
@@ -543,14 +569,16 @@
         });
         const fields=document.createElement('div');fields.className='category-fields';
         for(const item of category.items)if(visible(item))addItem(item,itemIndex++,fields);
-        head.append(title,plus,renameForm);card.append(head,form,fields);outer.append(card);
+        head.append(title,edit,plus,renameForm);card.append(head,form,fields);outer.append(card);
       }
       renderTotal();
     }
     function renderTotal(){
       let totalBudget=0n;
       for(const name of allNames()){if(visible(name)){const budget=budgetFor(name);if(budget!==null)totalBudget+=BigInt(budget)}}
-let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString());renderCartola(total);
+let total=0n;
+      for(const records of Object.values(entries))for(const record of records)total+=BigInt(record.amount);
+      for(const name of allNames())if(visible(name)&&amounts[name])total+=BigInt(amounts[name]);$('total').textContent='$'+fmt(total.toString());renderCartola(total);
       const remainingBudget=totalBudget-total;
       $('budget-total').textContent=(remainingBudget<0n?'- $':'$')+fmt((remainingBudget<0n?-remainingBudget:remainingBudget).toString());
     }
@@ -565,29 +593,39 @@ let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts
       return weeks;
     }
     function renderWeeks(){
-      const {year,month}=viewYM(),now=today();const current=same({year,month},baseYM());
-      const weeks=weeksInMonth(year,month);const outer=$('weeks');outer.replaceChildren();
-      $('month-meta').textContent=`${weeks.length} ${weeks.length===1?'semana':'semanas'}`;
-      const totals=weeks.map(()=>0n);let undated=0n;
-      for(const records of Object.values(entries))for(const record of records){
-        if(!record.date||record.date.slice(0,7)!==ym(year,month)){undated+=BigInt(record.amount);continue}
-        const day=Number(record.date.slice(8));
-        let index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
+      const {year,month}=viewYM(),now=today(),monthKey=ym(year,month),last=new Date(year,month+1,0).getDate();
+      const current=same({year,month},baseYM()),weeks=weeksInMonth(year,month),outer=$('weeks');outer.replaceChildren();
+      $('month-meta').textContent=`${weeks.length} semanas`;
+      const groups=weeks.map(()=>[]);let undated=0n;
+      for(const [item,records] of Object.entries(entries))for(const record of records){
+        if(!record.date||record.date.slice(0,7)!==monthKey){undated+=BigInt(record.amount);continue}
+        const day=Number(record.date.slice(8));let index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
         if(index<0&&weeks.length)index=day<weeks[0].a?0:weeks.length-1;
-        if(index>=0)totals[index]+=BigInt(record.amount);
+        if(index>=0)groups[index].push({...record,item});
       }
-      for(let i=0;i<weeks.length;i++){
-        const w=weeks[i];const active=current&&now.getDate()>=(i===0?1:w.a)&&now.getDate()<=(i===weeks.length-1?new Date(year,month+1,0).getDate():w.b);
-        const card=document.createElement('div');card.className='week'+(active?' current':'');
+      weeks.forEach((w,i)=>{
+        const active=current&&now.getDate()>=(i===0?1:w.a)&&now.getDate()<=(i===weeks.length-1?last:w.b);
+        const card=document.createElement('details');card.className='week'+(active?' current':'');const key=monthKey+':'+i;card.open=expandedWeeks.has(key);
+        card.addEventListener('toggle',()=>{if(card.open)expandedWeeks.add(key);else expandedWeeks.delete(key)});
+        const summary=document.createElement('summary');summary.className='week-summary';summary.setAttribute('aria-label',`Ver movimientos de la semana ${i+1}`);
         const num=document.createElement('div');num.className='week-num';num.textContent=String(i+1);
-        const body=document.createElement('div');
-        const name=document.createElement('p');name.className='week-name';name.textContent=`Semana ${i+1}`;
-        const date=document.createElement('p');date.className='week-date';date.textContent=`${w.a}–${w.b} de ${MONTHS[month].toLowerCase()}`;
-        body.append(name,date);card.append(num,body);
-        const total=document.createElement('span');total.className='week-total';total.textContent='$'+fmt(totals[i].toString());total.setAttribute('aria-label',`Total semana ${i+1}`);card.append(total);
-        if(active){const badge=document.createElement('span');badge.className='week-badge';badge.textContent='Semana actual';card.append(badge)}
-        outer.append(card);
-      }
+        const body=document.createElement('div'),name=document.createElement('p');name.className='week-name';name.textContent=`Semana ${i+1}`;
+        const date=document.createElement('p');date.className='week-date';date.textContent=`${w.a}–${w.b} de ${MONTHS[month].toLowerCase()}`;body.append(name,date);
+        const total=document.createElement('span');total.className='week-total';total.textContent='$'+fmt(groups[i].reduce((s,r)=>s+BigInt(r.amount),0n).toString());total.setAttribute('aria-label',`Total semana ${i+1}`);
+        summary.append(num,body,total);card.append(summary);
+        const detail=document.createElement('div');detail.className='week-movements';
+        if(i===0&&w.a>1){const note=document.createElement('p');note.className='week-included';note.textContent='Incluye días de inicio del mes';detail.append(note)}
+        if(i===weeks.length-1&&w.b<last){const note=document.createElement('p');note.className='week-included';note.textContent='Incluye días de fin del mes';detail.append(note)}
+        if(active){const badge=document.createElement('span');badge.className='week-badge';badge.textContent='Semana actual';body.append(badge)}
+        if(!groups[i].length){const empty=document.createElement('p');empty.className='week-included';empty.textContent='Sin movimientos registrados.';detail.append(empty)}
+        groups[i].sort((a,b)=>a.date.localeCompare(b.date)).forEach(record=>{
+          const row=document.createElement('div');row.className='week-movement';
+          const description=document.createElement('div'),item=document.createElement('strong');item.textContent=record.item;
+          const meta=document.createElement('span');meta.className='movement-meta';const category=CATEGORIES.find(c=>c.items.includes(record.item));meta.textContent=record.date.split('-').reverse().join('/')+(category?' · '+displayCategory(category):'');
+          const amount=document.createElement('span');amount.className='movement-amount';amount.textContent='- $'+fmt(record.amount);
+          description.append(item,meta);row.append(description,amount);detail.append(row);
+        });card.append(detail);outer.append(card);
+      });
       if(undated>0n){const note=document.createElement('p');note.className='undated-note';note.textContent='Gastos anteriores sin fecha: $'+fmt(undated.toString())+'. Se conservan en el total mensual, pero no se asignan a una semana.';outer.append(note)}
     }
     function renderHeader(){
