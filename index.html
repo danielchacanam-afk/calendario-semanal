@@ -88,6 +88,16 @@
     .expense-date{width:100%;min-width:0;border:1px solid #dce4ec;border-radius:7px;padding:5px;color:#64768a;background:#fff;font-size:12px}.expense-date-label{font-size:11px;color:#64768a}
     .record-date{display:block;color:#64768a;font-size:10px;font-weight:400}.record-amount{text-align:left}
     .week-total{margin-left:auto;font-weight:750;color:#182b42;font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap}.week{flex-wrap:wrap}.week-badge{margin-left:0}.undated-note{color:#64768a;font-size:12px;margin-top:12px}
+
+    [hidden]{display:none!important}
+    .cloud-panel{max-width:720px;margin:20px auto;padding:18px;background:#fff;border:1px solid #dce4ec;border-radius:13px}
+    .expense>.amount-wrap{width:100%}
+    .cloud-panel h2{font-size:18px;margin:0 0 8px}.cloud-panel p{font-size:13px}
+    #cloud-login{display:flex;flex-direction:column;gap:10px}
+    #cloud-login label{display:flex;flex-direction:column;gap:4px;font-size:13px}
+    #cloud-login input{border:1px solid #cfd9e3;border-radius:8px;padding:10px;width:100%}
+    .cloud-actions{display:flex;gap:8px;flex-wrap:wrap}.cloud-actions button{border:1px solid #cfd9e3;border-radius:8px;background:white;color:#173b62;padding:8px 12px}
+    .cloud-actions button[type=submit]{background:#173b62;color:#fff}#cloud-login-error{color:#b42424;margin:0}#cloud-status{margin:10px 0 0}
   </style>
 </head>
 <body>
@@ -98,6 +108,26 @@
     </div>
   </header>
   <main>
+    <section class="cloud-panel" aria-label="Cuenta y sincronización">
+      <h2>Tu calendario en todos tus dispositivos</h2>
+      <form id="cloud-login">
+        <p>Usa el mismo correo y contraseña en el computador y en el celular. Si es tu primera vez, crea tu cuenta aquí.</p>
+        <label>Correo electrónico<input id="cloud-email" type="email" autocomplete="username" required></label>
+        <label>Contraseña<input id="cloud-password" type="password" autocomplete="current-password" minlength="6" required></label>
+        <div class="cloud-actions"><button type="submit">Entrar</button><button id="cloud-create" type="button">Crear cuenta</button><button id="cloud-reset" type="button">Olvidé mi contraseña</button></div>
+        <p id="cloud-login-error" role="alert"></p>
+      </form>
+      <div id="cloud-account" class="cloud-actions" hidden>
+        <button id="cloud-import" type="button" hidden>Importar datos anteriores de este navegador</button>
+        <button id="legacy-backup" type="button" hidden>Descargar respaldo anterior</button>
+        <button id="cloud-backup" type="button">Descargar respaldo</button>
+        <button id="cloud-reload" type="button" hidden>Recargar datos de la nube</button>
+        <button id="cloud-signout" type="button">Cerrar sesión</button>
+      </div>
+      <p id="cloud-status" role="status">Conectando… Si no carga, revisa tu conexión y recarga la página.</p>
+    </section>
+    <div id="calendar-fields" hidden>
+
     <section class="month-section" aria-label="Seleccionar mes">
       <nav class="month-nav" aria-label="Navegación entre meses">
         <button id="prev" class="nav-button" type="button" aria-label="Mes anterior">‹ <span id="prev-name">Octubre</span></button>
@@ -113,8 +143,8 @@
       <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
       <div class="categories" id="categories"></div>
       <div class="total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
-      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los montos y registros se guardan por mes en este navegador y no se sincronizan entre dispositivos.</p>
-      <p class="storage-error" id="storage-error" role="status">El navegador bloqueó el almacenamiento. Los cambios podrían perderse al cerrar esta pestaña.</p>
+      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
+      <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
     </section>
 
     <section class="weeks-section" aria-labelledby="weeks-heading">
@@ -122,10 +152,11 @@
       <div id="weeks" class="week-list"></div>
       <p class="footer-note">Semanas de lunes a domingo con más de tres días dentro del mes. Los gastos de días excluidos se suman a la primera o última semana visible.</p>
     </section>
+    </div>
   </main>
 
   <script>
-  (() => {
+  window.startCalendar = () => {
     'use strict';
     const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const CATEGORIES = [
@@ -136,13 +167,14 @@
       {name:'Bancario',items:['Mantención / intereses cuenta']}
     ];
     const $=id=>document.getElementById(id);
+    const BASE_CATEGORIES=CATEGORIES.map(c=>c.items.slice());
     const ORIGINAL_NAMES=new Set(CATEGORIES.flatMap(c=>c.items));
     const CUSTOM_NAMES_KEY='calendario-semanal:conceptos-personalizados:v1';
     const allNames=()=>CATEGORIES.flatMap(c=>c.items);
     const BUDGET_KEY='calendario-semanal:presupuestos:v1';
     let budgets={},budgetStorageError=false;
     try{
-      const data=JSON.parse(localStorage.getItem(BUDGET_KEY)||'{}');
+      const data=JSON.parse(window.calendarStorage.getItem(BUDGET_KEY)||'{}');
       if(data&&typeof data==='object'&&!Array.isArray(data)){
         for(const [name,history] of Object.entries(data)){
           if(!history||typeof history!=='object'||Array.isArray(history))continue;
@@ -161,29 +193,29 @@
       const history=Object.fromEntries(Object.entries(budgets[name]||{}).filter(([key])=>key<month));
       history[month]=value;
       const next={...budgets,[name]:history};
-      try{localStorage.setItem(BUDGET_KEY,JSON.stringify(next));budgets=next;budgetStorageError=false;updateStorageError();return true}
+      try{window.calendarStorage.setItem(BUDGET_KEY,JSON.stringify(next));budgets=next;budgetStorageError=false;updateStorageError();return true}
       catch(e){budgetStorageError=true;updateStorageError();return false}
     }
     function deleteRecord(name,index){
       const next={...entries,[name]:(entries[name]||[]).filter((_,i)=>i!==index)};
-      try{localStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));entries=next;entryStorageError=false;updateStorageError();return true}
+      try{window.calendarStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));entries=next;entryStorageError=false;updateStorageError();return true}
       catch(e){entryStorageError=true;updateStorageError();return false}
     }
     const DELETED_KEY='calendario-semanal:eliminados:v1';
     const ENTRIES_PREFIX='calendario-semanal:registros:v1:';
     let deleted={},entries={},entryStorageError=false;
-    try{const data=JSON.parse(localStorage.getItem(DELETED_KEY)||'{}');if(data&&typeof data==='object'&&!Array.isArray(data))deleted=data}catch(e){customStorageError=true}
+    try{const data=JSON.parse(window.calendarStorage.getItem(DELETED_KEY)||'{}');if(data&&typeof data==='object'&&!Array.isArray(data))deleted=data}catch(e){customStorageError=true}
     const visible=name=>!Object.hasOwn(deleted,name)||ym(viewYM().year,viewYM().month)<deleted[name];
     function removeItem(name){
       const month=ym(viewYM().year,viewYM().month);
       const next={...deleted,[name]:month};
-      try{localStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;renderExpenses()}
+      try{window.calendarStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;renderExpenses()}
       catch(e){customStorageError=true;updateStorageError()}
     }
     function readEntries(){
       entries={};entryStorageError=false;
       try{
-        const data=JSON.parse(localStorage.getItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month))||'{}');
+        const data=JSON.parse(window.calendarStorage.getItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month))||'{}');
         if(data&&typeof data==='object'&&!Array.isArray(data))for(const name of allNames()){
           if(Array.isArray(data[name]))entries[name]=data[name].flatMap(v=>{
             if(typeof v==='string'&&/^\d+$/.test(v))return [{amount:v,date:null}];
@@ -203,7 +235,7 @@
       if(!validDate(date)||date.slice(0,7)!==ym(viewYM().year,viewYM().month))return false;
       const next={...entries,[name]:[...(entries[name]||[]),{amount:digits,date}]};
       try{
-        localStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));
+        window.calendarStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));
         entries=next;entryStorageError=false;
       }catch(e){entryStorageError=true;updateStorageError();return false}
       delete amounts[name];save();updateStorageError();return true;
@@ -212,7 +244,7 @@
     const nameKey=value=>value.toLocaleLowerCase('es-CL');
     function readCustomNames(){
       try{
-        const saved=localStorage.getItem(CUSTOM_NAMES_KEY);
+        const saved=window.calendarStorage.getItem(CUSTOM_NAMES_KEY);
         if(!saved)return;
         const data=JSON.parse(saved);
         if(!data||typeof data!=='object'||Array.isArray(data))return;
@@ -233,7 +265,7 @@
       for(const category of CATEGORIES){
         data[category.name]=category.items.filter(name=>!ORIGINAL_NAMES.has(name));
       }
-      try{localStorage.setItem(CUSTOM_NAMES_KEY,JSON.stringify(data));customStorageError=false}
+      try{window.calendarStorage.setItem(CUSTOM_NAMES_KEY,JSON.stringify(data));customStorageError=false}
       catch(e){customStorageError=true}
       updateStorageError();
     }
@@ -252,13 +284,13 @@
     function read(){
       let obj={};storageError=false;
       try{
-        const raw=localStorage.getItem(storageKey(viewYM().year,viewYM().month));
+        const raw=window.calendarStorage.getItem(storageKey(viewYM().year,viewYM().month));
         if(raw){const candidate=JSON.parse(raw);if(candidate&&typeof candidate==='object'&&!Array.isArray(candidate))for(const name of allNames()){let v=candidate[name];if(typeof v==='string'&&/^\d+$/.test(v))obj[name]=clean(v);}}
       }catch(e){storageError=true}
       amounts=obj;updateStorageError();
     }
     function save(){
-      try{localStorage.setItem(storageKey(viewYM().year,viewYM().month),JSON.stringify(amounts));storageError=false}
+      try{window.calendarStorage.setItem(storageKey(viewYM().year,viewYM().month),JSON.stringify(amounts));storageError=false}
       catch(e){storageError=true}
       updateStorageError();
     }
@@ -443,6 +475,17 @@
     $('prev').addEventListener('click',()=>go(-1));$('next').addEventListener('click',()=>go(1));
     $('today-button').addEventListener('click',()=>{selected=null;render()});
     render();
+    let refreshPending=false;
+    function receiveCloud(){
+      if(document.activeElement?.tagName==='INPUT'&&document.activeElement.value.trim()!==''){refreshPending=true;return}
+      refreshPending=false;
+      CATEGORIES.forEach((category,i)=>{category.items=BASE_CATEGORIES[i].slice()});
+      readCustomNames();
+      try{budgets=JSON.parse(window.calendarStorage.getItem(BUDGET_KEY)||'{}');deleted=JSON.parse(window.calendarStorage.getItem(DELETED_KEY)||'{}')}catch{}
+      render();
+    }
+    window.addEventListener('calendar-cloud-update',receiveCloud);
+    document.addEventListener('focusout',()=>{if(refreshPending)setTimeout(receiveCloud,0)});
     // Refresh after date changes, browser sleep or switching back to this tab.
     function dateKey(d){return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`}
     let lastDate=dateKey(today());
@@ -455,8 +498,9 @@
     document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDate()});
     window.addEventListener('focus',checkDate);
     window.addEventListener('pageshow',checkDate);
-  })();
+  };
   </script>
+<script type="module" src="./cloud-sync.js"></script>
 </body>
 </html>
 
