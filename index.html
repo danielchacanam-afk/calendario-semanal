@@ -37,6 +37,7 @@
     .add-concept{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border:2px solid #1465d5;border-radius:50%;background:#fff;color:#1465d5;font-size:26px;font-weight:400;line-height:1;padding:0;position:relative;font-size:0;transition:background .15s}
     .add-concept::before,.add-concept::after{content:'';position:absolute;left:50%;top:50%;background:currentColor;transform:translate(-50%,-50%);border-radius:1px}.add-concept::before{width:13px;height:2px}.add-concept::after{width:2px;height:13px}
     .expense-heading{display:flex;align-items:center;gap:8px}.expense-name{border:0;background:none;padding:0;text-align:left;color:inherit;font-size:13px;font-weight:600;cursor:pointer}.delete-item{border:0;background:none;color:#c42020;font-size:22px;font-weight:700;padding:0 5px;line-height:1;cursor:pointer}.delete-item[hidden]{display:none}.expense-records{display:flex;flex-direction:column;gap:4px;color:#000;font-size:14px;font-variant-numeric:tabular-nums;grid-column:1 / -1}.expense-record{margin:0}
+    .expense-heading{flex-wrap:wrap;justify-content:space-between;grid-column:1 / -1}.expense-name{flex:1;min-width:0}.budget-box{display:flex;align-items:center;gap:4px;margin-left:auto;max-width:100%}.budget-input{width:105px;max-width:100%;min-width:65px;text-align:right;border:1px solid #cfd9e3;border-radius:6px;background:#fff;padding:4px;font-size:13px;font-weight:700;font-variant-numeric:tabular-nums}.budget-actions{display:flex;gap:3px}.budget-actions[hidden]{display:none}.budget-save,.budget-cancel{border:0;background:none;font-size:22px;padding:0 3px;cursor:pointer}.budget-save{color:#15803d}.budget-cancel{color:#c42020}.expense-record{display:flex;align-items:center;gap:8px}.record-amount{border:0;background:none;color:#000;padding:3px 0;font:inherit;text-align:left;cursor:pointer}@media(max-width:570px){.expense{display:flex;flex-direction:column;align-items:stretch}.budget-input{width:110px}}
     .add-concept:hover,.add-concept[aria-expanded="true"]{background:#eaf3ff}
     .new-expense-form{margin:-2px 0 16px;display:flex;flex-direction:column;gap:8px}
     .new-expense-form[hidden]{display:none!important}
@@ -100,7 +101,7 @@
       <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
       <div class="categories" id="categories"></div>
       <div class="total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
-      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. Los montos y registros se guardan por mes en este navegador y no se sincronizan entre dispositivos.</p>
+      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los montos y registros se guardan por mes en este navegador y no se sincronizan entre dispositivos.</p>
       <p class="storage-error" id="storage-error" role="status">El navegador bloqueó el almacenamiento. Los cambios podrían perderse al cerrar esta pestaña.</p>
     </section>
 
@@ -126,6 +127,36 @@
     const ORIGINAL_NAMES=new Set(CATEGORIES.flatMap(c=>c.items));
     const CUSTOM_NAMES_KEY='calendario-semanal:conceptos-personalizados:v1';
     const allNames=()=>CATEGORIES.flatMap(c=>c.items);
+    const BUDGET_KEY='calendario-semanal:presupuestos:v1';
+    let budgets={},budgetStorageError=false;
+    try{
+      const data=JSON.parse(localStorage.getItem(BUDGET_KEY)||'{}');
+      if(data&&typeof data==='object'&&!Array.isArray(data)){
+        for(const [name,history] of Object.entries(data)){
+          if(!history||typeof history!=='object'||Array.isArray(history))continue;
+          const valid=Object.fromEntries(Object.entries(history).filter(([month,value])=>/^\d{4}-\d{2}$/.test(month)&&typeof value==='string'&&/^\d+$/.test(value)));
+          Object.defineProperty(budgets,name,{value:valid,enumerable:true,writable:true,configurable:true});
+        }
+      }
+    }catch(e){budgetStorageError=true}
+    function budgetFor(name){
+      const month=ym(viewYM().year,viewYM().month),history=budgets[name]||{};
+      const effective=Object.keys(history).filter(key=>key<=month).sort().pop();
+      return effective===undefined?null:history[effective];
+    }
+    function saveBudget(name,value){
+      const month=ym(viewYM().year,viewYM().month);
+      const history=Object.fromEntries(Object.entries(budgets[name]||{}).filter(([key])=>key<month));
+      history[month]=value;
+      const next={...budgets,[name]:history};
+      try{localStorage.setItem(BUDGET_KEY,JSON.stringify(next));budgets=next;budgetStorageError=false;updateStorageError();return true}
+      catch(e){budgetStorageError=true;updateStorageError();return false}
+    }
+    function deleteRecord(name,index){
+      const next={...entries,[name]:(entries[name]||[]).filter((_,i)=>i!==index)};
+      try{localStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));entries=next;entryStorageError=false;updateStorageError();return true}
+      catch(e){entryStorageError=true;updateStorageError();return false}
+    }
     const DELETED_KEY='calendario-semanal:eliminados:v1';
     const ENTRIES_PREFIX='calendario-semanal:registros:v1:';
     let deleted={},entries={},entryStorageError=false;
@@ -209,7 +240,7 @@
       catch(e){storageError=true}
       updateStorageError();
     }
-    function updateStorageError(){$('storage-error').style.display=(storageError||customStorageError||entryStorageError)?'block':'none'}
+    function updateStorageError(){$('storage-error').style.display=(storageError||customStorageError||entryStorageError||budgetStorageError)?'block':'none'}
     function addItem(item,index,container){
       const div=document.createElement('div');div.className='expense';
       const heading=document.createElement('div');heading.className='expense-heading';
@@ -218,6 +249,31 @@
       label.setAttribute('aria-expanded','false');
       label.addEventListener('click',()=>{remove.hidden=!remove.hidden;label.setAttribute('aria-expanded',String(!remove.hidden))});
       remove.addEventListener('click',()=>removeItem(item));heading.append(label,remove);
+      const budgetBox=document.createElement('div');budgetBox.className='budget-box';
+      const budgetInput=document.createElement('input');budgetInput.className='budget-input';budgetInput.type='text';budgetInput.inputMode='numeric';budgetInput.maxLength=24;budgetInput.placeholder='Presupuesto';budgetInput.setAttribute('aria-label',`Presupuesto de ${item}`);
+      const budgetActions=document.createElement('div');budgetActions.className='budget-actions';budgetActions.hidden=true;
+      const confirmBudget=document.createElement('button');confirmBudget.type='button';confirmBudget.className='budget-save';confirmBudget.textContent='✓';confirmBudget.setAttribute('aria-label',`Guardar presupuesto de ${item}`);
+      const cancelBudget=document.createElement('button');cancelBudget.type='button';cancelBudget.className='budget-cancel';cancelBudget.textContent='×';cancelBudget.setAttribute('aria-label','Cancelar cambio de presupuesto');
+      let editingBudget=false;
+      function renderBudget(){
+        if(editingBudget)return;
+        const original=budgetFor(item);
+        if(original===null){budgetInput.value='';budgetInput.style.color='#64768a';return}
+        const spent=(entries[item]||[]).reduce((sum,value)=>sum+BigInt(value),0n);
+        const remaining=BigInt(original)-spent;
+        budgetInput.value=(remaining<0n?'- $':'$')+fmt((remaining<0n?-remaining:remaining).toString());
+        const ratio=BigInt(original)>0n?Math.max(0,Math.min(100,Number(remaining*100n/BigInt(original)))):0;
+        budgetInput.style.color=ratio>50?`hsl(${40+(ratio-50)*1.6}, 85%, 28%)`:`hsl(${ratio*.8}, 85%, 35%)`;
+        budgetInput.title=`Presupuesto: $${fmt(original)} · Gastado: $${fmt(spent.toString())} · Disponible: ${budgetInput.value}`;
+      }
+      budgetInput.addEventListener('focus',()=>{if(editingBudget)return;editingBudget=true;budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
+      budgetInput.addEventListener('input',()=>{budgetInput.value=fmt(clean(budgetInput.value))});
+      function closeBudget(){editingBudget=false;budgetActions.hidden=true;renderBudget()}
+      function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value))closeBudget()}
+      confirmBudget.addEventListener('click',commitBudget);cancelBudget.addEventListener('click',closeBudget);
+      budgetInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commitBudget()}if(event.key==='Escape'){event.preventDefault();closeBudget()}});
+      budgetActions.append(confirmBudget,cancelBudget);budgetBox.append(budgetInput,budgetActions);heading.append(budgetBox);
+      renderBudget();
       const id=`expense-${index}`;
       const wrap=document.createElement('div');wrap.className='amount-wrap';
       const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
@@ -226,7 +282,7 @@
         if(event.key==='Enter'){
           event.preventDefault();const digits=clean(input.value);
           if(!digits||BigInt(digits)===0n)return;
-          if(recordAmount(item,digits)){input.value='';renderRecords();renderTotal()}
+          if(recordAmount(item,digits)){input.value='';renderRecords();renderBudget();renderTotal()}
           return;
         }
         const i=input.selectionStart;
@@ -249,7 +305,14 @@
       const records=document.createElement('div');records.className='expense-records';records.setAttribute('aria-live','polite');
       function renderRecords(){
         records.replaceChildren();
-        for(const amount of entries[item]||[]){const line=document.createElement('p');line.className='expense-record';line.textContent='- $'+fmt(amount);records.append(line)}
+        (entries[item]||[]).forEach((amount,recordIndex)=>{
+          const line=document.createElement('div');line.className='expense-record';
+          const value=document.createElement('button');value.type='button';value.className='record-amount';value.textContent='- $'+fmt(amount);value.setAttribute('aria-expanded','false');
+          const removeRecord=document.createElement('button');removeRecord.type='button';removeRecord.className='delete-item';removeRecord.textContent='×';removeRecord.hidden=true;removeRecord.setAttribute('aria-label',`Borrar gasto de $${fmt(amount)} en ${item}`);
+          value.addEventListener('click',()=>{removeRecord.hidden=!removeRecord.hidden;value.setAttribute('aria-expanded',String(!removeRecord.hidden))});
+          removeRecord.addEventListener('click',()=>{if(deleteRecord(item,recordIndex)){renderRecords();renderBudget();renderTotal()}});
+          line.append(value,removeRecord);records.append(line);
+        });
       }
       renderRecords();
       wrap.append(prefix,input);div.append(heading,wrap,records);container.append(div);
