@@ -133,6 +133,7 @@
       .mobile-add-expense{display:block;align-self:flex-start;background:none;border:0;color:#2767a8;font-size:12px;min-height:38px;padding:4px 0;cursor:pointer}.expense:not(.entry-open)>.amount-wrap{display:none}.expense.entry-open>.mobile-add-expense{display:none}.category-fields{gap:20px}
       .total-number{min-width:140px;font-size:26px}.budget-input{font-size:15px;width:120px}.week-summary{gap:9px;padding:12px}.week-total{font-size:20px;min-width:90px}.week-num{width:36px;height:36px;flex-basis:36px}.category{padding:10px 14px}
     }
+    .movement-select{flex:1;min-width:0;border:0;background:none;padding:6px 0;color:inherit;font:inherit;text-align:left;cursor:pointer}.week-movement .movement-amount{cursor:pointer}.week-movement .delete-item{flex:0 0 44px}
   </style>
 </head>
 <body>
@@ -306,7 +307,22 @@
       try{window.calendarStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;return true}
       catch{customStorageError=true;updateStorageError();return false}
     }
-    function removeItem(name){if(setItemVisibility(name,true))renderExpenses()}
+    function removeItem(name){
+      const month=ym(viewYM().year,viewYM().month);
+      try{
+        const keys=window.calendarStorage.keys();
+        const updates=[];
+        for(const key of keys){
+          const prefix=key.startsWith(ENTRIES_PREFIX)?ENTRIES_PREFIX:key.startsWith('calendario-semanal:gastos:v1:')?'calendario-semanal:gastos:v1:':null;
+          if(!prefix||key.slice(prefix.length)<month)continue;
+          const value=JSON.parse(window.calendarStorage.getItem(key)||'{}');
+          if(value&&typeof value==='object'&&Object.hasOwn(value,name)){delete value[name];updates.push([key,JSON.stringify(value)])}
+        }
+        if(!setItemVisibility(name,true))return;
+        for(const [key,value] of updates)window.calendarStorage.setItem(key,value);
+        read();readEntries();renderExpenses();renderWeeks();
+      }catch{entryStorageError=true;updateStorageError()}
+    }
     function readEntries(){
       entries={};entryStorageError=false;
       try{
@@ -596,7 +612,7 @@
       let totalBudget=0n;
       for(const name of allNames()){if(visible(name)){const budget=budgetFor(name);if(budget!==null)totalBudget+=BigInt(budget)}}
 let total=0n;
-      for(const records of Object.values(entries))for(const record of records)total+=BigInt(record.amount);
+      for(const [name,records] of Object.entries(entries))if(visible(name))for(const record of records)total+=BigInt(record.amount);
       for(const name of allNames())if(visible(name)&&amounts[name])total+=BigInt(amounts[name]);$('total').textContent='$'+fmt(total.toString());renderCartola(total);
       const remainingBudget=totalBudget-total;
       $('budget-total').textContent=(remainingBudget<0n?'- $':'$')+fmt((remainingBudget<0n?-remainingBudget:remainingBudget).toString());
@@ -616,11 +632,12 @@ let total=0n;
       const current=same({year,month},baseYM()),weeks=weeksInMonth(year,month),outer=$('weeks');outer.replaceChildren();
       $('month-meta').textContent=`${weeks.length} semanas`;
       const groups=weeks.map(()=>[]);let undated=0n;
-      for(const [item,records] of Object.entries(entries))for(const record of records){
+      for(const [item,records] of Object.entries(entries))for(const [recordIndex,record] of records.entries()){
+        if(!visible(item))continue;
         if(!record.date||record.date.slice(0,7)!==monthKey){undated+=BigInt(record.amount);continue}
         const day=Number(record.date.slice(8));let index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
         if(index<0&&weeks.length)index=day<weeks[0].a?0:weeks.length-1;
-        if(index>=0)groups[index].push({...record,item});
+        if(index>=0)groups[index].push({...record,item,recordIndex});
       }
       weeks.forEach((w,i)=>{
         const active=current&&now.getDate()>=(i===0?1:w.a)&&now.getDate()<=(i===weeks.length-1?last:w.b);
@@ -639,10 +656,16 @@ let total=0n;
         if(!groups[i].length){const empty=document.createElement('p');empty.className='week-included';empty.textContent='Sin movimientos registrados.';detail.append(empty)}
         groups[i].sort((a,b)=>a.date.localeCompare(b.date)).forEach(record=>{
           const row=document.createElement('div');row.className='week-movement';
-          const description=document.createElement('div'),item=document.createElement('strong');item.textContent=record.item;
+          const description=document.createElement('button');description.type='button';description.className='movement-select';description.setAttribute('aria-label',`Seleccionar gasto de ${record.item} por $${fmt(record.amount)}`);
+          const item=document.createElement('strong');item.textContent=record.item;
           const meta=document.createElement('span');meta.className='movement-meta';const category=CATEGORIES.find(c=>c.items.includes(record.item));meta.textContent=record.date.split('-').reverse().join('/')+(category?' · '+displayCategory(category):'');
           const amount=document.createElement('span');amount.className='movement-amount';amount.textContent='- $'+fmt(record.amount);
-          description.append(item,meta);row.append(description,amount);detail.append(row);
+          const remove=document.createElement('button');remove.type='button';remove.className='delete-item';remove.textContent='×';remove.hidden=true;remove.setAttribute('aria-label',`Borrar gasto semanal de ${record.item} por $${fmt(record.amount)}`);
+          description.setAttribute('aria-expanded','false');
+          function select(){remove.hidden=!remove.hidden;description.setAttribute('aria-expanded',String(!remove.hidden))}
+          description.addEventListener('click',select);amount.addEventListener('click',select);
+          remove.addEventListener('click',()=>{if(deleteRecord(record.item,record.recordIndex)){renderExpenses();renderWeeks()}});
+          description.append(item,meta);row.append(description,amount,remove);detail.append(row);
         });card.append(detail);outer.append(card);
       });
       if(undated>0n){const note=document.createElement('p');note.className='undated-note';note.textContent='Gastos anteriores sin fecha: $'+fmt(undated.toString())+'. Se conservan en el total mensual, pero no se asignan a una semana.';outer.append(note)}
