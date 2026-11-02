@@ -99,6 +99,13 @@
     .cloud-actions{display:flex;gap:8px;flex-wrap:wrap}.cloud-actions button{border:1px solid #cfd9e3;border-radius:8px;background:white;color:#173b62;padding:8px 12px}
     .cloud-actions button[type=submit]{background:#173b62;color:#fff}#cloud-login-error{color:#b42424;margin:0}#cloud-status{margin:10px 0 0}
     .cloud-panel summary{cursor:pointer;font-size:14px;font-weight:650;color:#64768a}.cloud-panel[open] summary{margin-bottom:14px}.cloud-panel:not([open]){padding:12px 16px;background:transparent;box-shadow:none}
+    .expense-total-bar{margin-top:0;border-top:0;padding-top:10px}
+    .category-title-button{border:0;background:none;padding:0;color:inherit;text-align:left;font:inherit;letter-spacing:inherit;text-transform:inherit;cursor:pointer}
+    .category-header{flex-wrap:wrap}.category-title{flex-basis:calc(100% - 45px)}
+    .category-rename-form{flex:0 0 100%;display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+    .category-rename-form[hidden]{display:none}.category-rename-input{min-width:0;width:100%;padding:8px;border:1px solid #9ab7d4;border-radius:7px;color:#182b42;background:#fff;font-size:13px}
+    .category-rename-form button{border:1px solid #dce4ec;background:#fff;border-radius:6px;padding:4px 9px;font-size:18px;cursor:pointer}
+    .category-rename-form .rename-save{color:#15803d}.category-rename-form .rename-cancel{color:#c42020}
   </style>
 </head>
 <body>
@@ -125,7 +132,8 @@
     <section class="expenses-section" aria-labelledby="expense-heading">
       <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
       <div class="categories" id="categories"></div>
-      <div class="total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
+      <div class="total-bar"><strong>Presupuesto Total</strong><output id="budget-total" class="total-number" aria-label="Presupuesto Total">$0</output></div>
+      <div class="total-bar expense-total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
       <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
       <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
     </section>
@@ -169,6 +177,20 @@
     ];
     const $=id=>document.getElementById(id);
     const BASE_CATEGORIES=CATEGORIES.map(c=>c.items.slice());
+    const CATEGORY_TITLES_KEY='calendario-semanal:categorias:v1';
+    let categoryTitles={};
+    const displayCategory=category=>categoryTitles[category.name]||category.name;
+    function readCategoryTitles(){
+      categoryTitles={};
+      try{
+        const data=JSON.parse(window.calendarStorage.getItem(CATEGORY_TITLES_KEY)||'{}');
+        if(data&&typeof data==='object'&&!Array.isArray(data))for(const category of CATEGORIES){
+          const value=data[category.name];
+          if(typeof value==='string'&&value.trim().length>0&&value.length<=100)categoryTitles[category.name]=value.trim();
+        }
+      }catch{}
+    }
+    readCategoryTitles();
     const ORIGINAL_NAMES=new Set(CATEGORIES.flatMap(c=>c.items));
     const CUSTOM_NAMES_KEY='calendario-semanal:conceptos-personalizados:v1';
     const allNames=()=>CATEGORIES.flatMap(c=>c.items);
@@ -324,7 +346,7 @@
       budgetInput.addEventListener('focus',()=>{if(editingBudget)return;editingBudget=true;budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
       budgetInput.addEventListener('input',()=>{budgetInput.value=fmt(clean(budgetInput.value))});
       function closeBudget(){editingBudget=false;budgetActions.hidden=true;renderBudget()}
-      function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value))closeBudget()}
+      function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value)){closeBudget();renderTotal()}}
       confirmBudget.addEventListener('click',commitBudget);cancelBudget.addEventListener('click',closeBudget);
       budgetInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commitBudget()}if(event.key==='Escape'){event.preventDefault();closeBudget()}});
       budgetActions.append(confirmBudget,cancelBudget);budgetBox.append(budgetInput,budgetActions);heading.append(budgetBox);
@@ -379,11 +401,30 @@
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
       for(const category of CATEGORIES){
-        const card=document.createElement('section');card.className='category';card.setAttribute('aria-label',category.name);
+        const card=document.createElement('section');card.className='category';card.setAttribute('aria-label',displayCategory(category));
         const head=document.createElement('div');head.className='category-header';
-        const title=document.createElement('h3');title.className='category-title';title.textContent=category.name;
+        const title=document.createElement('h3');title.className='category-title';
+        const titleButton=document.createElement('button');titleButton.type='button';titleButton.className='category-title-button';titleButton.textContent=displayCategory(category);titleButton.setAttribute('aria-label',`Modificar nombre de ${displayCategory(category)}`);titleButton.setAttribute('aria-expanded','false');title.append(titleButton);
+        const renameForm=document.createElement('form');renameForm.className='category-rename-form';renameForm.hidden=true;
+        const renameInput=document.createElement('input');renameInput.className='category-rename-input';renameInput.type='text';renameInput.maxLength=100;renameInput.required=true;renameInput.setAttribute('aria-label','Nuevo nombre de categoría');
+        const renameSave=document.createElement('button');renameSave.type='submit';renameSave.className='rename-save';renameSave.textContent='✓';renameSave.setAttribute('aria-label','Guardar nombre de categoría');
+        const renameCancel=document.createElement('button');renameCancel.type='button';renameCancel.className='rename-cancel';renameCancel.textContent='×';renameCancel.setAttribute('aria-label','Cancelar cambio de nombre');
+        const renameError=document.createElement('p');renameError.className='new-expense-error';renameError.setAttribute('role','alert');
+        renameForm.append(renameInput,renameSave,renameCancel,renameError);
+        function closeRename(){renameForm.hidden=true;titleButton.setAttribute('aria-expanded','false');titleButton.focus()}
+        titleButton.addEventListener('click',()=>{renameForm.hidden=false;renameInput.value=displayCategory(category);renameError.textContent='';titleButton.setAttribute('aria-expanded','true');renameInput.focus();renameInput.select()});
+        renameCancel.addEventListener('click',closeRename);
+        renameInput.addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeRename()}});
+        renameForm.addEventListener('submit',event=>{
+          event.preventDefault();const value=renameInput.value.trim().replace(/\s+/g,' ');
+          if(!value){renameError.textContent='Escribe un nombre.';return}
+          if(CATEGORIES.some(other=>other!==category&&nameKey(displayCategory(other))===nameKey(value))){renameError.textContent='Otra categoría ya tiene ese nombre.';return}
+          const next={...categoryTitles,[category.name]:value};
+          try{window.calendarStorage.setItem(CATEGORY_TITLES_KEY,JSON.stringify(next));categoryTitles=next;renderExpenses()}
+          catch{renameError.textContent='No se pudo guardar. Revisa la sincronización.'}
+        });
         const plus=document.createElement('button');plus.type='button';plus.className='add-concept';plus.textContent='+';
-        plus.setAttribute('aria-label',`Agregar gasto en ${category.name}`);
+        plus.setAttribute('aria-label',`Agregar gasto en ${displayCategory(category)}`);
         plus.setAttribute('aria-expanded','false');
         const form=document.createElement('form');form.className='new-expense-form';form.hidden=true;
         const fieldLabel=document.createElement('label');fieldLabel.className='new-expense-label';fieldLabel.textContent='Nuevo concepto';
@@ -417,11 +458,15 @@
         });
         const fields=document.createElement('div');fields.className='category-fields';
         for(const item of category.items)if(visible(item))addItem(item,itemIndex++,fields);
-        head.append(title,plus);card.append(head,form,fields);outer.append(card);
+        head.append(title,plus,renameForm);card.append(head,form,fields);outer.append(card);
       }
       renderTotal();
     }
-    function renderTotal(){let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString())}
+    function renderTotal(){
+      let totalBudget=0n;
+      for(const name of allNames()){if(visible(name)){const budget=budgetFor(name);if(budget!==null)totalBudget+=BigInt(budget)}}
+      $('budget-total').textContent='$'+fmt(totalBudget.toString());
+let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString())}
     function weeksInMonth(year,month){
       const last=new Date(year,month+1,0).getDate();
       const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
@@ -481,7 +526,7 @@
       if(document.activeElement?.tagName==='INPUT'&&document.activeElement.value.trim()!==''){refreshPending=true;return}
       refreshPending=false;
       CATEGORIES.forEach((category,i)=>{category.items=BASE_CATEGORIES[i].slice()});
-      readCustomNames();
+      readCustomNames();readCategoryTitles();
       try{budgets=JSON.parse(window.calendarStorage.getItem(BUDGET_KEY)||'{}');deleted=JSON.parse(window.calendarStorage.getItem(DELETED_KEY)||'{}')}catch{}
       render();
     }
