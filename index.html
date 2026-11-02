@@ -289,13 +289,24 @@
     const ENTRIES_PREFIX='calendario-semanal:registros:v1:';
     let deleted={},entries={},entryStorageError=false;
     try{const data=JSON.parse(window.calendarStorage.getItem(DELETED_KEY)||'{}');if(data&&typeof data==='object'&&!Array.isArray(data))deleted=data}catch(e){customStorageError=true}
-    const visible=name=>!Object.hasOwn(deleted,name)||ym(viewYM().year,viewYM().month)<deleted[name];
-    function removeItem(name){
-      const month=ym(viewYM().year,viewYM().month);
-      const next={...deleted,[name]:month};
-      try{window.calendarStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;renderExpenses()}
-      catch(e){customStorageError=true;updateStorageError()}
+    function itemVisibilityHistory(name){
+      const value=deleted[name];
+      if(typeof value==='string')return [{month:value,hidden:true}];
+      return Array.isArray(value)?value.filter(e=>e&&typeof e.month==='string'&&typeof e.hidden==='boolean'):[];
     }
+    const visible=name=>{
+      const month=ym(viewYM().year,viewYM().month);
+      const last=itemVisibilityHistory(name).filter(e=>e.month<=month).sort((a,b)=>a.month.localeCompare(b.month)).pop();
+      return !last||!last.hidden;
+    };
+    function setItemVisibility(name,hidden){
+      const month=ym(viewYM().year,viewYM().month);
+      const history=itemVisibilityHistory(name).filter(e=>e.month<month);
+      const next={...deleted,[name]:[...history,{month,hidden}]};
+      try{window.calendarStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;return true}
+      catch{customStorageError=true;updateStorageError();return false}
+    }
+    function removeItem(name){if(setItemVisibility(name,true))renderExpenses()}
     function readEntries(){
       entries={};entryStorageError=false;
       try{
@@ -558,7 +569,15 @@
           event.preventDefault();
           const name=textField.value.trim().replace(/\s+/g,' ');
           if(!name){error.textContent='Escribe un nombre para el gasto.';textField.focus();return}
-          if(allNames().some(existing=>nameKey(existing)===nameKey(name))){
+          const existing=allNames().find(item=>nameKey(item)===nameKey(name));
+          if(existing){
+            if(!visible(existing)){
+              if(setItemVisibility(existing,false)){
+                const owner=CATEGORIES.find(c=>c.items.includes(existing));if(owner)expandedCategories.add(owner.name);
+                renderExpenses();
+              }else{error.textContent='No se pudo recuperar el ítem. Revisa la sincronización.'}
+              return;
+            }
             error.textContent='Este concepto ya existe. Escribe otro nombre.';textField.focus();return;
           }
           category.items.push(name);
@@ -579,7 +598,7 @@
 let total=0n;
       for(const records of Object.values(entries))for(const record of records)total+=BigInt(record.amount);
       for(const name of allNames())if(visible(name)&&amounts[name])total+=BigInt(amounts[name]);$('total').textContent='$'+fmt(total.toString());renderCartola(total);
-      const remainingBudget=totalBudget-total;
+      const remainingBudget=totalBudget;
       $('budget-total').textContent=(remainingBudget<0n?'- $':'$')+fmt((remainingBudget<0n?-remainingBudget:remainingBudget).toString());
     }
     function weeksInMonth(year,month){
