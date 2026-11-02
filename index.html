@@ -84,6 +84,10 @@
     .expense-record:nth-child(3n+1){padding-left:0}
     .record-amount{max-width:100%;overflow-wrap:anywhere;font-size:12px}
     .expense-record .delete-item{font-size:18px;padding:0 2px}
+
+    .expense-date{width:100%;min-width:0;border:1px solid #dce4ec;border-radius:7px;padding:5px;color:#64768a;background:#fff;font-size:12px}.expense-date-label{font-size:11px;color:#64768a}
+    .record-date{display:block;color:#64768a;font-size:10px;font-weight:400}.record-amount{text-align:left}
+    .week-total{margin-left:auto;font-weight:750;color:#182b42;font-size:18px;font-variant-numeric:tabular-nums;white-space:nowrap}.week{flex-wrap:wrap}.week-badge{margin-left:0}.undated-note{color:#64768a;font-size:12px;margin-top:12px}
   </style>
 </head>
 <body>
@@ -116,7 +120,7 @@
     <section class="weeks-section" aria-labelledby="weeks-heading">
       <h2 class="weeks-title" id="weeks-heading">Semanas del mes</h2>
       <div id="weeks" class="week-list"></div>
-      <p class="footer-note">Semanas de lunes a domingo. Solo se incluyen las que tienen al menos tres días dentro del mes.</p>
+      <p class="footer-note">Semanas de lunes a domingo, incluyendo los días de inicio y fin del mes. Los totales reúnen los gastos registrados de todas las categorías.</p>
     </section>
   </main>
 
@@ -181,13 +185,23 @@
       try{
         const data=JSON.parse(localStorage.getItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month))||'{}');
         if(data&&typeof data==='object'&&!Array.isArray(data))for(const name of allNames()){
-          if(Array.isArray(data[name]))entries[name]=data[name].filter(v=>typeof v==='string'&&/^\d+$/.test(v));
+          if(Array.isArray(data[name]))entries[name]=data[name].flatMap(v=>{
+            if(typeof v==='string'&&/^\d+$/.test(v))return [{amount:v,date:null}];
+            if(v&&typeof v==='object'&&typeof v.amount==='string'&&/^\d+$/.test(v.amount))return [{amount:v.amount,date:validDate(v.date)?v.date:null}];
+            return [];
+          });
         }
       }catch(e){entryStorageError=true}
       updateStorageError();
     }
-    function recordAmount(name,digits){
-      const next={...entries,[name]:[...(entries[name]||[]),digits]};
+    function validDate(value){
+      if(typeof value!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+      const [y,m,d]=value.split('-').map(Number),date=new Date(y,m-1,d);
+      return date.getFullYear()===y&&date.getMonth()===m-1&&date.getDate()===d;
+    }
+    function recordAmount(name,digits,date){
+      if(!validDate(date)||date.slice(0,7)!==ym(viewYM().year,viewYM().month))return false;
+      const next={...entries,[name]:[...(entries[name]||[]),{amount:digits,date}]};
       try{
         localStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));
         entries=next;entryStorageError=false;
@@ -267,7 +281,7 @@
         if(editingBudget)return;
         const original=budgetFor(item);
         if(original===null){budgetInput.value='';budgetInput.style.color='#64768a';return}
-        const spent=(entries[item]||[]).reduce((sum,value)=>sum+BigInt(value),0n);
+        const spent=(entries[item]||[]).reduce((sum,value)=>sum+BigInt(value.amount),0n);
         const remaining=BigInt(original)-spent;
         budgetInput.value=(remaining<0n?'- $':'$')+fmt((remaining<0n?-remaining:remaining).toString());
         const ratio=BigInt(original)>0n?Math.max(0,Math.min(100,Number(remaining*100n/BigInt(original)))):0;
@@ -290,7 +304,8 @@
         if(event.key==='Enter'){
           event.preventDefault();const digits=clean(input.value);
           if(!digits||BigInt(digits)===0n)return;
-          if(recordAmount(item,digits)){input.value='';renderRecords();renderBudget();renderTotal()}
+          if(!expenseDate.value){expenseDate.reportValidity();expenseDate.focus();return}
+          if(recordAmount(item,digits,expenseDate.value)){input.value='';renderRecords();renderBudget();renderTotal();renderWeeks()}
           return;
         }
         const i=input.selectionStart;
@@ -310,20 +325,28 @@
         if(digits)amounts[item]=digits;else delete amounts[item];
         save();renderTotal();
       });
+      const dateLabel=document.createElement('label');dateLabel.className='expense-date-label';dateLabel.textContent='Fecha del gasto';
+      const expenseDate=document.createElement('input');expenseDate.type='date';expenseDate.className='expense-date';expenseDate.setAttribute('aria-label',`Fecha del gasto en ${item}`);
+      const view=viewYM(),monthKey=ym(view.year,view.month),now=today();
+      expenseDate.min=monthKey+'-01';expenseDate.max=monthKey+'-'+new Date(view.year,view.month+1,0).getDate();
+      expenseDate.value=same(view,baseYM())?monthKey+'-'+String(now.getDate()).padStart(2,'0'):'';
+      expenseDate.required=true;dateLabel.append(expenseDate);
       const records=document.createElement('div');records.className='expense-records';records.setAttribute('aria-live','polite');
       function renderRecords(){
         records.replaceChildren();
-        (entries[item]||[]).forEach((amount,recordIndex)=>{
+        (entries[item]||[]).forEach((record,recordIndex)=>{
+          const amount=record.amount;
           const line=document.createElement('div');line.className='expense-record';
           const value=document.createElement('button');value.type='button';value.className='record-amount';value.textContent='- $'+fmt(amount);value.setAttribute('aria-expanded','false');
           const removeRecord=document.createElement('button');removeRecord.type='button';removeRecord.className='delete-item';removeRecord.textContent='×';removeRecord.hidden=true;removeRecord.setAttribute('aria-label',`Borrar gasto de $${fmt(amount)} en ${item}`);
           value.addEventListener('click',()=>{removeRecord.hidden=!removeRecord.hidden;value.setAttribute('aria-expanded',String(!removeRecord.hidden))});
-          removeRecord.addEventListener('click',()=>{if(deleteRecord(item,recordIndex)){renderRecords();renderBudget();renderTotal()}});
-          line.append(value,removeRecord);records.append(line);
+          removeRecord.addEventListener('click',()=>{if(deleteRecord(item,recordIndex)){renderRecords();renderBudget();renderTotal();renderWeeks()}});
+          const dateText=document.createElement('span');dateText.className='record-date';dateText.textContent=record.date?record.date.split('-').reverse().join('/'):'Sin fecha';
+          value.append(dateText);line.append(value,removeRecord);records.append(line);
         });
       }
       renderRecords();
-      wrap.append(prefix,input);div.append(heading,wrap,records);container.append(div);
+      wrap.append(prefix,input);div.append(heading,wrap,dateLabel,records);container.append(div);
     }
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
@@ -370,14 +393,14 @@
       }
       renderTotal();
     }
-    function renderTotal(){let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount)}$('total').textContent='$'+fmt(total.toString())}
+    function renderTotal(){let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString())}
     function weeksInMonth(year,month){
       const last=new Date(year,month+1,0).getDate();
       const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
       const weeks=[];
       for(let start=1-mondayOffset;start<=last;start+=7){
         const a=Math.max(1,start),b=Math.min(last,start+6);
-        if(b-a+1>=3)weeks.push({a,b});
+        weeks.push({a,b});
       }
       return weeks;
     }
@@ -385,6 +408,12 @@
       const {year,month}=viewYM(),now=today();const current=same({year,month},baseYM());
       const weeks=weeksInMonth(year,month);const outer=$('weeks');outer.replaceChildren();
       $('month-meta').textContent=`${weeks.length} ${weeks.length===1?'semana':'semanas'}`;
+      const totals=weeks.map(()=>0n);let undated=0n;
+      for(const records of Object.values(entries))for(const record of records){
+        if(!record.date||record.date.slice(0,7)!==ym(year,month)){undated+=BigInt(record.amount);continue}
+        const day=Number(record.date.slice(8)),index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
+        if(index>=0)totals[index]+=BigInt(record.amount);
+      }
       for(let i=0;i<weeks.length;i++){
         const w=weeks[i];const active=current&&now.getDate()>=w.a&&now.getDate()<=w.b;
         const card=document.createElement('div');card.className='week'+(active?' current':'');
@@ -393,9 +422,11 @@
         const name=document.createElement('p');name.className='week-name';name.textContent=`Semana ${i+1}`;
         const date=document.createElement('p');date.className='week-date';date.textContent=`${w.a}–${w.b} de ${MONTHS[month].toLowerCase()}`;
         body.append(name,date);card.append(num,body);
+        const total=document.createElement('span');total.className='week-total';total.textContent='$'+fmt(totals[i].toString());total.setAttribute('aria-label',`Total semana ${i+1}`);card.append(total);
         if(active){const badge=document.createElement('span');badge.className='week-badge';badge.textContent='Semana actual';card.append(badge)}
         outer.append(card);
       }
+      if(undated>0n){const note=document.createElement('p');note.className='undated-note';note.textContent='Gastos anteriores sin fecha: $'+fmt(undated.toString())+'. Se conservan en el total mensual, pero no se asignan a una semana.';outer.append(note)}
     }
     function renderHeader(){
       const view=viewYM(),current=same(view,baseYM());
