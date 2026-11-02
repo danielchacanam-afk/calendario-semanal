@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#173b62">
+  <meta name="description" content="Calendario semanal y calculadora de gastos mensuales en pesos chilenos.">
+  <title>Calendario semanal | Gastos mensuales</title>
+  <style>
+    :root{color-scheme:light;--bg:#f6f8fb;--surface:#fff;--ink:#182b42;--muted:#64768a;--border:#dce4ec;--navy:#173b62;--blue:#2767a8;--highlight:#edf5ff;--shadow:0 3px 13px rgba(23,59,98,.045)}
+    *{box-sizing:border-box}
+    html{min-width:320px}
+    body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;font-size:15px;line-height:1.42}
+    button,input{font:inherit}
+    button{cursor:pointer}
+    button:focus-visible,input:focus-visible{outline:3px solid #70abef;outline-offset:2px}
+    .app-header{background:var(--surface);border-bottom:1px solid var(--border)}
+    .header-inner{max-width:1720px;margin:auto;padding:19px clamp(16px,3vw,36px);display:flex;align-items:center;gap:12px}
+    .app-icon{display:grid;place-items:center;flex:0 0 44px;width:44px;height:44px;border-radius:12px;color:white;background:var(--navy)}
+    .site-title{font-size:16px;font-weight:760;margin:0}
+    .site-subtitle{margin:1px 0 0;color:var(--muted);font-size:12px}
+    main{max-width:1720px;margin:auto;padding:0 clamp(16px,3vw,36px) 70px}
+    .month-section{max-width:720px;margin:35px auto 0}
+    .month-nav{display:flex;justify-content:space-between;gap:10px;margin-bottom:26px}
+    .nav-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:45px;max-width:48%;padding:9px 15px;border:1px solid var(--border);border-radius:11px;background:white;color:var(--navy);font-weight:650;box-shadow:var(--shadow)}
+    .nav-button:hover{background:#eef5fc;border-color:#9bbde1}
+    .month-eyebrow{color:var(--muted);font-size:11px;font-weight:740;letter-spacing:.15em}
+    .month-title{font-size:clamp(28px,4vw,40px);line-height:1.2;letter-spacing:-.04em;margin:8px 0 3px;font-weight:760}
+    .month-meta{color:var(--muted);font-size:13px;margin:6px 0}
+    .back-current{background:none;border:0;color:var(--blue);padding:5px 0;min-height:35px;text-decoration:underline;text-underline-offset:3px;font-size:13px;font-weight:650}
+    .expenses-section{margin:34px 0 38px;padding-top:25px;border-top:1px solid var(--border)}
+    .section-heading{text-align:center;margin:0 0 23px;font-size:22px;font-weight:745;letter-spacing:-.025em}
+    .categories{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:15px;align-items:stretch}
+    .category{min-width:0;padding:16px 15px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow)}
+    .category-title{margin:0 0 18px;font-size:11px;line-height:1.45;font-weight:780;letter-spacing:.09em;color:#496480;text-transform:uppercase;min-height:32px}
+    .category-fields{display:flex;flex-direction:column;gap:18px}
+    .expense{min-width:0;display:flex;flex-direction:column;gap:7px}
+    .expense label{font-size:13px;font-weight:600;line-height:1.3;overflow-wrap:anywhere}
+    .amount-wrap{display:flex;align-items:center;gap:8px;background:white;border:1px solid #cfd9e3;border-radius:10px;padding:0 10px;min-width:0;height:43px;box-shadow:0 1px 2px rgba(23,59,98,.05)}
+    .amount-wrap:focus-within{border-color:#438ad1;box-shadow:0 0 0 3px rgba(67,138,209,.13)}
+    .currency{color:#668096}
+    .amount{min-width:0;width:100%;height:100%;padding:0;border:0;outline:none!important;background:transparent;text-align:right;color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+    .total-bar{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;padding:20px 5px 6px;border-top:1px solid var(--border);margin-top:20px}
+    .total-bar strong{font-size:16px}
+    .total-number{font-size:23px;font-weight:800;letter-spacing:-.025em;font-variant-numeric:tabular-nums}
+    .storage-note{color:var(--muted);font-size:12px;margin:6px 5px 0}
+    .storage-error{color:#b42424;font-size:13px;margin:7px 5px 0;display:none}
+    .weeks-section{max-width:720px;margin:30px auto 0;padding-top:24px;border-top:1px solid var(--border)}
+    .weeks-title{font-size:19px;margin:0 0 17px;letter-spacing:-.02em}
+    .week-list{display:flex;flex-direction:column;gap:10px}
+    .week{display:flex;align-items:center;gap:15px;padding:15px;background:var(--surface);border:1px solid var(--border);border-radius:13px}
+    .week.current{background:var(--highlight);border-color:#80b2e2}
+    .week-num{height:44px;width:44px;display:grid;place-items:center;flex:0 0 44px;background:#edf2f7;border-radius:10px;font-size:18px;font-weight:780}
+    .week.current .week-num{color:#fff;background:var(--navy)}
+    .week-name{font-weight:740;font-size:14px;margin:0}
+    .week-date{font-size:13px;color:var(--muted);margin:2px 0 0}
+    .week-badge{margin-left:auto;color:var(--blue);font-weight:740;font-size:11px;white-space:nowrap}
+    .footer-note{text-align:center;color:var(--muted);font-size:12px;max-width:720px;margin:20px auto}
+    @media(max-width:1199px){.categories{grid-template-columns:repeat(3,minmax(0,1fr))}.category-title{min-height:initial}}
+    @media(max-width:780px){.categories{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
+    @media(max-width:570px){.month-section{margin-top:23px}.expenses-section{margin-top:26px}.categories{grid-template-columns:1fr}.category{padding:15px}.category-fields{gap:13px}.category-title{margin-bottom:15px}.expense{display:grid;grid-template-columns:minmax(0,1fr) minmax(125px,43%);align-items:center;gap:10px}.expense label{font-size:13px}.section-heading{font-size:21px}.total-bar{align-items:baseline}.nav-button{font-size:13px;padding:8px 10px}}
+    @media(max-width:370px){.expense{grid-template-columns:minmax(0,1fr) minmax(108px,43%)}}
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="app-icon" aria-hidden="true"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18M7 14h3M7 18h3M14 14h3"/></svg></div>
+      <div><p class="site-title">Calendario semanal</p><p class="site-subtitle">Planificación mensual y control de gastos</p></div>
+    </div>
+  </header>
+  <main>
+    <section class="month-section" aria-label="Seleccionar mes">
+      <nav class="month-nav" aria-label="Navegación entre meses">
+        <button id="prev" class="nav-button" type="button" aria-label="Mes anterior">‹ <span id="prev-name">Octubre</span></button>
+        <button id="next" class="nav-button" type="button" aria-label="Mes siguiente"><span id="next-name">Diciembre</span> ›</button>
+      </nav>
+      <div id="eyebrow" class="month-eyebrow">MES ACTUAL</div>
+      <h1 class="month-title" id="month-title" aria-live="polite">Noviembre 2026</h1>
+      <div id="month-meta" class="month-meta">4 semanas</div>
+      <button class="back-current" type="button" id="today-button" hidden>Volver al mes actual</button>
+    </section>
+
+    <section class="expenses-section" aria-labelledby="expense-heading">
+      <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
+      <div class="categories" id="categories"></div>
+      <div class="total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
+      <p class="storage-note">Los montos se guardan automáticamente en este navegador, separados por mes. No se sincronizan entre dispositivos.</p>
+      <p class="storage-error" id="storage-error" role="status">El navegador bloqueó el almacenamiento. Los cambios podrían perderse al cerrar esta pestaña.</p>
+    </section>
+
+    <section class="weeks-section" aria-labelledby="weeks-heading">
+      <h2 class="weeks-title" id="weeks-heading">Semanas del mes</h2>
+      <div id="weeks" class="week-list"></div>
+      <p class="footer-note">Semanas de lunes a domingo. Solo se incluyen las que tienen al menos tres días dentro del mes.</p>
+    </section>
+  </main>
+
+  <script>
+  (() => {
+    'use strict';
+    const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+    const CATEGORIES = [
+      {name:'Transferencias recurrentes',items:['Sofi | Administración','Contadora','Carla Podesta | Música','Mensualidad colegio']},
+      {name:'Vivienda y servicios',items:['Gastos común','Enel','Metrogas','Aguas Andinas','Entel Internet']},
+      {name:'Consumo',items:['Jumbo','Feria']},
+      {name:'Impuestos y cotizaciones',items:['SII Impuestos','Isapre']},
+      {name:'Bancario',items:['Mantención / intereses cuenta']}
+    ];
+    const $=id=>document.getElementById(id);
+    const allNames=CATEGORIES.flatMap(c=>c.items);
+    const fmt=digits=>String(digits||'').replace(/\B(?=(\d{3})+(?!\d))/g,'.');
+    const clean=value=>String(value).replace(/\D/g,'').replace(/^0+(?=\d)/,'');
+    // null means follow the real current month. Otherwise, the month is user-selected.
+    let selected=null,amounts={},storageError=false;
+    const ym=(year,month)=>`${year}-${String(month+1).padStart(2,'0')}`;
+    const storageKey=(year,month)=>`calendario-semanal:gastos:v1:${ym(year,month)}`;
+    const today=()=>new Date();
+    const baseYM=()=>{const d=today();return {year:d.getFullYear(),month:d.getMonth()}};
+    const viewYM=()=>selected||baseYM();
+    const shift=({year,month},delta)=>{let d=new Date(year,month+delta,1);return {year:d.getFullYear(),month:d.getMonth()}};
+    const same=(a,b)=>a.year===b.year&&a.month===b.month;
+    function read(){
+      let obj={};storageError=false;
+      try{
+        const raw=localStorage.getItem(storageKey(viewYM().year,viewYM().month));
+        if(raw){const candidate=JSON.parse(raw);if(candidate&&typeof candidate==='object'&&!Array.isArray(candidate))for(const name of allNames){let v=candidate[name];if(typeof v==='string'&&/^\d+$/.test(v))obj[name]=clean(v);}}
+      }catch(e){storageError=true}
+      amounts=obj;updateStorageError();
+    }
+    function save(){
+      try{localStorage.setItem(storageKey(viewYM().year,viewYM().month),JSON.stringify(amounts));storageError=false}
+      catch(e){storageError=true}
+      updateStorageError();
+    }
+    function updateStorageError(){$('storage-error').style.display=storageError?'block':'none'}
+    function addItem(item,index,container){
+      const div=document.createElement('div');div.className='expense';
+      const label=document.createElement('label');label.textContent=item;const id=`expense-${index}`;label.htmlFor=id;
+      const wrap=document.createElement('div');wrap.className='amount-wrap';
+      const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
+      const input=document.createElement('input');input.className='amount';input.id=id;input.type='text';input.inputMode='numeric';input.autocomplete='off';input.spellcheck=false;input.maxLength=24;input.setAttribute('aria-label',item);input.value=fmt(amounts[item]||'');
+      input.addEventListener('keydown',event=>{
+        const i=input.selectionStart;
+        if(i===null||i!==input.selectionEnd)return;
+        if(event.key==='Backspace'&&input.value[i-1]==='.')input.setSelectionRange(Math.max(0,i-2),i);
+        if(event.key==='Delete'&&input.value[i]==='.')input.setSelectionRange(i,i+2);
+      });
+      input.addEventListener('input',()=>{
+        const original=input.value;
+        const caret=input.selectionStart??original.length;
+        const priorCount=clean(original.slice(0,caret)).length;
+        const digits=clean(original);
+        input.value=fmt(digits);
+        let next=0,count=0;
+        while(next<input.value.length&&count<priorCount){if(/\d/.test(input.value[next]))count++;next++;}
+        try{input.setSelectionRange(next,next)}catch(e){}
+        if(digits)amounts[item]=digits;else delete amounts[item];
+        save();renderTotal();
+      });
+      wrap.append(prefix,input);div.append(label,wrap);container.append(div);
+    }
+    function renderExpenses(){
+      const outer=$('categories');outer.replaceChildren();let itemIndex=0;
+      for(const category of CATEGORIES){
+        const card=document.createElement('section');card.className='category';card.setAttribute('aria-label',category.name);
+        const title=document.createElement('h3');title.className='category-title';title.textContent=category.name;
+        const fields=document.createElement('div');fields.className='category-fields';
+        for(const item of category.items)addItem(item,itemIndex++,fields);
+        card.append(title,fields);outer.append(card);
+      }
+      renderTotal();
+    }
+    function renderTotal(){let total=0n;for(const name of allNames){if(amounts[name])total+=BigInt(amounts[name])}$('total').textContent='$'+fmt(total.toString())}
+    function weeksInMonth(year,month){
+      const last=new Date(year,month+1,0).getDate();
+      const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
+      const weeks=[];
+      for(let start=1-mondayOffset;start<=last;start+=7){
+        const a=Math.max(1,start),b=Math.min(last,start+6);
+        if(b-a+1>=3)weeks.push({a,b});
+      }
+      return weeks;
+    }
+    function renderWeeks(){
+      const {year,month}=viewYM(),now=today();const current=same({year,month},baseYM());
+      const weeks=weeksInMonth(year,month);const outer=$('weeks');outer.replaceChildren();
+      $('month-meta').textContent=`${weeks.length} ${weeks.length===1?'semana':'semanas'}`;
+      for(let i=0;i<weeks.length;i++){
+        const w=weeks[i];const active=current&&now.getDate()>=w.a&&now.getDate()<=w.b;
+        const card=document.createElement('div');card.className='week'+(active?' current':'');
+        const num=document.createElement('div');num.className='week-num';num.textContent=String(i+1);
+        const body=document.createElement('div');
+        const name=document.createElement('p');name.className='week-name';name.textContent=`Semana ${i+1}`;
+        const date=document.createElement('p');date.className='week-date';date.textContent=`${w.a}–${w.b} de ${MONTHS[month].toLowerCase()}`;
+        body.append(name,date);card.append(num,body);
+        if(active){const badge=document.createElement('span');badge.className='week-badge';badge.textContent='Semana actual';card.append(badge)}
+        outer.append(card);
+      }
+    }
+    function renderHeader(){
+      const view=viewYM(),current=same(view,baseYM());
+      const previous=shift(view,-1),next=shift(view,1);
+      $('prev-name').textContent=MONTHS[previous.month];$('next-name').textContent=MONTHS[next.month];
+      $('prev').setAttribute('aria-label',`Ver ${MONTHS[previous.month]} ${previous.year}`);
+      $('next').setAttribute('aria-label',`Ver ${MONTHS[next.month]} ${next.year}`);
+      $('eyebrow').textContent=current?'MES ACTUAL':'MES SELECCIONADO';
+      $('month-title').textContent=`${MONTHS[view.month]} ${view.year}`;
+      $('today-button').hidden=current;
+    }
+    function render(){renderHeader();read();renderExpenses();renderWeeks()}
+    function go(delta){
+      const target=shift(viewYM(),delta),base=baseYM();selected=same(target,base)?null:target;
+      render();
+    }
+    $('prev').addEventListener('click',()=>go(-1));$('next').addEventListener('click',()=>go(1));
+    $('today-button').addEventListener('click',()=>{selected=null;render()});
+    render();
+    // Refresh after date changes, browser sleep or switching back to this tab.
+    function dateKey(d){return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`}
+    let lastDate=dateKey(today());
+    function checkDate(){
+      const key=dateKey(today());
+      if(lastDate!==key){lastDate=key;render()}
+    }
+    checkDate();
+    setInterval(checkDate,30000);
+    document.addEventListener('visibilitychange',()=>{if(!document.hidden)checkDate()});
+    window.addEventListener('focus',checkDate);
+    window.addEventListener('pageshow',checkDate);
+  })();
+  </script>
+</body>
+</html>
