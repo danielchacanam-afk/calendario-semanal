@@ -152,7 +152,6 @@
         <p id="cartola-error" role="alert"></p>
       </div>
       <div class="total-bar expense-total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
-      <p class="storage-note">Pulsa Registrar o Enter para guardar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
       <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
     </section>
 
@@ -507,8 +506,10 @@
     function renderTotal(){
       let totalBudget=0n;
       for(const name of allNames()){if(visible(name)){const budget=budgetFor(name);if(budget!==null)totalBudget+=BigInt(budget)}}
-      $('budget-total').textContent='$'+fmt(totalBudget.toString());
-let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString());renderCartola(total)}
+let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString());renderCartola(total);
+      const remainingBudget=totalBudget-total;
+      $('budget-total').textContent=(remainingBudget<0n?'- $':'$')+fmt((remainingBudget<0n?-remainingBudget:remainingBudget).toString());
+    }
     function weeksInMonth(year,month){
       const last=new Date(year,month+1,0).getDate();
       const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
