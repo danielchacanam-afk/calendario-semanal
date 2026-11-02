@@ -5,7 +5,7 @@ import {getFirestore,doc,getDocFromServer,onSnapshot,runTransaction,serverTimest
 const app=initializeApp({apiKey:'AIzaSyCgFrJCgl5g-q98AVGZavdYtd9w9liI1cQ',authDomain:'calendario-semanal-2fb0e.firebaseapp.com',projectId:'calendario-semanal-2fb0e',appId:'1:477867830761:web:31bd2efb181b0307e9ef78',messagingSenderId:'477867830761'});
 const auth=getAuth(app),db=getFirestore(app),$=id=>document.getElementById(id);
 const native=window.localStorage;
-const validKey=k=>/^calendario-semanal:(conceptos-personalizados:v1|eliminados:v1|presupuestos:v1|gastos:v1:\d{4}-\d{2}|registros:v1:\d{4}-\d{2})$/.test(k);
+const validKey=k=>/^calendario-semanal:(categorias:v1|conceptos-personalizados:v1|eliminados:v1|presupuestos:v1|gastos:v1:\d{4}-\d{2}|registros:v1:\d{4}-\d{2})$/.test(k);
 let state=Object.create(null),revision=0,ref=null,uid=null,ready=false,dirty=false,saving=false,blocked=false,started=false,stop=null,timer=null,generation=0;
 const status=(message,error=false)=>{if(error&&$('cloud-options'))$('cloud-options').open=true;$('cloud-status').textContent=message;$('cloud-status').style.color=error?'#b42424':'#496480'};
 function lock(value){$('calendar-fields').inert=value;$('calendar-fields').style.opacity=value?'.55':'1'}
