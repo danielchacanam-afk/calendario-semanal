@@ -106,6 +106,9 @@
     .category-rename-form[hidden]{display:none}.category-rename-input{min-width:0;width:100%;padding:8px;border:1px solid #9ab7d4;border-radius:7px;color:#182b42;background:#fff;font-size:13px}
     .category-rename-form button{border:1px solid #dce4ec;background:#fff;border-radius:6px;padding:4px 9px;font-size:18px;cursor:pointer}
     .category-rename-form .rename-save{color:#15803d}.category-rename-form .rename-cancel{color:#c42020}
+    .register-expense{flex:0 0 auto;min-height:36px;padding:6px 10px;border:0;border-radius:7px;background:#173b62;color:#fff;font-size:12px;font-weight:700;cursor:pointer}
+    .register-expense:disabled{background:#e8edf3;color:#7b8997;cursor:default}.amount-wrap{padding-right:4px}
+    @media(max-width:570px){.amount-wrap{height:46px}.register-expense{min-height:38px}.amount{font-size:16px}}
   </style>
 </head>
 <body>
@@ -134,7 +137,7 @@
       <div class="categories" id="categories"></div>
       <div class="total-bar"><strong>Presupuesto Total</strong><output id="budget-total" class="total-number" aria-label="Presupuesto Total">$0</output></div>
       <div class="total-bar expense-total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
-      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
+      <p class="storage-note">Pulsa Registrar o Enter para guardar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
       <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
     </section>
 
@@ -355,16 +358,23 @@
       const wrap=document.createElement('div');wrap.className='amount-wrap';
       const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
       const input=document.createElement('input');input.className='amount';input.id=id;input.type='text';input.inputMode='numeric';input.autocomplete='off';input.spellcheck=false;input.maxLength=24;input.setAttribute('aria-label',item);input.value=fmt(amounts[item]||'');
-      input.addEventListener('keydown',event=>{
-        if(event.key==='Enter'){
-          event.preventDefault();const digits=clean(input.value);
-          if(!digits||BigInt(digits)===0n)return;
-          const view=viewYM(),now=today();
-          const day=Math.min(now.getDate(),new Date(view.year,view.month+1,0).getDate());
-          const recordedDate=ym(view.year,view.month)+'-'+String(day).padStart(2,'0');
-          if(recordAmount(item,digits,recordedDate)){input.value='';renderRecords();renderBudget();renderTotal();renderWeeks()}
-          return;
+      input.enterKeyHint='done';
+      const register=document.createElement('button');register.type='button';register.className='register-expense';register.textContent='Registrar';register.setAttribute('aria-label',`Registrar gasto en ${item}`);
+      function updateRegister(){const digits=clean(input.value);register.disabled=!digits||BigInt(digits)===0n}
+      function registerExpense(closeKeyboard=false){
+        const digits=clean(input.value);
+        if(!digits||BigInt(digits)===0n)return;
+        const view=viewYM(),now=today();
+        const day=Math.min(now.getDate(),new Date(view.year,view.month+1,0).getDate());
+        const recordedDate=ym(view.year,view.month)+'-'+String(day).padStart(2,'0');
+        if(recordAmount(item,digits,recordedDate)){
+          input.value='';updateRegister();renderRecords();renderBudget();renderTotal();renderWeeks();
+          if(closeKeyboard)input.blur();
         }
+      }
+      register.addEventListener('click',()=>registerExpense(true));updateRegister();
+      input.addEventListener('keydown',event=>{
+        if(event.key==='Enter'){event.preventDefault();registerExpense();return}
         const i=input.selectionStart;
         if(i===null||i!==input.selectionEnd)return;
         if(event.key==='Backspace'&&input.value[i-1]==='.')input.setSelectionRange(Math.max(0,i-2),i);
@@ -380,7 +390,7 @@
         while(next<input.value.length&&count<priorCount){if(/\d/.test(input.value[next]))count++;next++;}
         try{input.setSelectionRange(next,next)}catch(e){}
         if(digits)amounts[item]=digits;else delete amounts[item];
-        save();renderTotal();
+        updateRegister();save();renderTotal();
       });
       const records=document.createElement('div');records.className='expense-records';records.setAttribute('aria-live','polite');
       function renderRecords(){
@@ -396,7 +406,7 @@
         });
       }
       renderRecords();
-      wrap.append(prefix,input);div.append(heading,wrap,records);container.append(div);
+      wrap.append(prefix,input,register);div.append(heading,wrap,records);container.append(div);
     }
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
