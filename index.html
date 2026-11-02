@@ -34,7 +34,9 @@
     .category{min-width:0;padding:16px 15px 18px;border-radius:14px;background:var(--surface);border:1px solid var(--border);box-shadow:var(--shadow)}
     .category-header{display:flex;align-items:flex-start;justify-content:space-between;gap:7px;min-height:38px;margin-bottom:14px}
     .category-title{margin:0;font-size:11px;line-height:1.45;font-weight:780;letter-spacing:.09em;color:#496480;text-transform:uppercase;overflow-wrap:anywhere;flex:1;min-width:0}
-    .add-concept{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border:2px solid #1465d5;border-radius:50%;background:#fff;color:#1465d5;font-size:26px;font-weight:400;line-height:1;padding:0 0 3px;transition:background .15s}
+    .add-concept{width:31px;height:31px;flex:0 0 31px;display:grid;place-items:center;border:2px solid #1465d5;border-radius:50%;background:#fff;color:#1465d5;font-size:26px;font-weight:400;line-height:1;padding:0;position:relative;font-size:0;transition:background .15s}
+    .add-concept::before,.add-concept::after{content:'';position:absolute;left:50%;top:50%;background:currentColor;transform:translate(-50%,-50%);border-radius:1px}.add-concept::before{width:13px;height:2px}.add-concept::after{width:2px;height:13px}
+    .expense-heading{display:flex;align-items:center;gap:8px}.expense-name{border:0;background:none;padding:0;text-align:left;color:inherit;font-size:13px;font-weight:600;cursor:pointer}.delete-item{border:0;background:none;color:#c42020;font-size:22px;font-weight:700;padding:0 5px;line-height:1;cursor:pointer}.delete-item[hidden]{display:none}.expense-records{display:flex;flex-direction:column;gap:4px;color:#000;font-size:14px;font-variant-numeric:tabular-nums;grid-column:1 / -1}.expense-record{margin:0}
     .add-concept:hover,.add-concept[aria-expanded="true"]{background:#eaf3ff}
     .new-expense-form{margin:-2px 0 16px;display:flex;flex-direction:column;gap:8px}
     .new-expense-form[hidden]{display:none!important}
@@ -98,7 +100,7 @@
       <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
       <div class="categories" id="categories"></div>
       <div class="total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
-      <p class="storage-note">Los conceptos agregados quedan disponibles en todos los meses. Los montos se guardan por mes en este navegador y no se sincronizan entre dispositivos.</p>
+      <p class="storage-note">Pulsa Enter para registrar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. Los montos y registros se guardan por mes en este navegador y no se sincronizan entre dispositivos.</p>
       <p class="storage-error" id="storage-error" role="status">El navegador bloqueó el almacenamiento. Los cambios podrían perderse al cerrar esta pestaña.</p>
     </section>
 
@@ -124,6 +126,35 @@
     const ORIGINAL_NAMES=new Set(CATEGORIES.flatMap(c=>c.items));
     const CUSTOM_NAMES_KEY='calendario-semanal:conceptos-personalizados:v1';
     const allNames=()=>CATEGORIES.flatMap(c=>c.items);
+    const DELETED_KEY='calendario-semanal:eliminados:v1';
+    const ENTRIES_PREFIX='calendario-semanal:registros:v1:';
+    let deleted={},entries={},entryStorageError=false;
+    try{const data=JSON.parse(localStorage.getItem(DELETED_KEY)||'{}');if(data&&typeof data==='object'&&!Array.isArray(data))deleted=data}catch(e){customStorageError=true}
+    const visible=name=>!Object.hasOwn(deleted,name)||ym(viewYM().year,viewYM().month)<deleted[name];
+    function removeItem(name){
+      const month=ym(viewYM().year,viewYM().month);
+      const next={...deleted,[name]:month};
+      try{localStorage.setItem(DELETED_KEY,JSON.stringify(next));deleted=next;renderExpenses()}
+      catch(e){customStorageError=true;updateStorageError()}
+    }
+    function readEntries(){
+      entries={};entryStorageError=false;
+      try{
+        const data=JSON.parse(localStorage.getItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month))||'{}');
+        if(data&&typeof data==='object'&&!Array.isArray(data))for(const name of allNames()){
+          if(Array.isArray(data[name]))entries[name]=data[name].filter(v=>typeof v==='string'&&/^\d+$/.test(v));
+        }
+      }catch(e){entryStorageError=true}
+      updateStorageError();
+    }
+    function recordAmount(name,digits){
+      const next={...entries,[name]:[...(entries[name]||[]),digits]};
+      try{
+        localStorage.setItem(ENTRIES_PREFIX+ym(viewYM().year,viewYM().month),JSON.stringify(next));
+        entries=next;entryStorageError=false;
+      }catch(e){entryStorageError=true;updateStorageError();return false}
+      delete amounts[name];save();updateStorageError();return true;
+    }
     let customStorageError=false;
     const nameKey=value=>value.toLocaleLowerCase('es-CL');
     function readCustomNames(){
@@ -178,14 +209,26 @@
       catch(e){storageError=true}
       updateStorageError();
     }
-    function updateStorageError(){$('storage-error').style.display=(storageError||customStorageError)?'block':'none'}
+    function updateStorageError(){$('storage-error').style.display=(storageError||customStorageError||entryStorageError)?'block':'none'}
     function addItem(item,index,container){
       const div=document.createElement('div');div.className='expense';
-      const label=document.createElement('label');label.textContent=item;const id=`expense-${index}`;label.htmlFor=id;
+      const heading=document.createElement('div');heading.className='expense-heading';
+      const label=document.createElement('button');label.type='button';label.className='expense-name';label.textContent=item;
+      const remove=document.createElement('button');remove.type='button';remove.className='delete-item';remove.textContent='×';remove.hidden=true;remove.setAttribute('aria-label',`Eliminar ${item} desde este mes`);
+      label.setAttribute('aria-expanded','false');
+      label.addEventListener('click',()=>{remove.hidden=!remove.hidden;label.setAttribute('aria-expanded',String(!remove.hidden))});
+      remove.addEventListener('click',()=>removeItem(item));heading.append(label,remove);
+      const id=`expense-${index}`;
       const wrap=document.createElement('div');wrap.className='amount-wrap';
       const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
       const input=document.createElement('input');input.className='amount';input.id=id;input.type='text';input.inputMode='numeric';input.autocomplete='off';input.spellcheck=false;input.maxLength=24;input.setAttribute('aria-label',item);input.value=fmt(amounts[item]||'');
       input.addEventListener('keydown',event=>{
+        if(event.key==='Enter'){
+          event.preventDefault();const digits=clean(input.value);
+          if(!digits||BigInt(digits)===0n)return;
+          if(recordAmount(item,digits)){input.value='';renderRecords();renderTotal()}
+          return;
+        }
         const i=input.selectionStart;
         if(i===null||i!==input.selectionEnd)return;
         if(event.key==='Backspace'&&input.value[i-1]==='.')input.setSelectionRange(Math.max(0,i-2),i);
@@ -203,7 +246,13 @@
         if(digits)amounts[item]=digits;else delete amounts[item];
         save();renderTotal();
       });
-      wrap.append(prefix,input);div.append(label,wrap);container.append(div);
+      const records=document.createElement('div');records.className='expense-records';records.setAttribute('aria-live','polite');
+      function renderRecords(){
+        records.replaceChildren();
+        for(const amount of entries[item]||[]){const line=document.createElement('p');line.className='expense-record';line.textContent='- $'+fmt(amount);records.append(line)}
+      }
+      renderRecords();
+      wrap.append(prefix,input);div.append(heading,wrap,records);container.append(div);
     }
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
@@ -245,12 +294,12 @@
           if(amountInput)amountInput.focus();
         });
         const fields=document.createElement('div');fields.className='category-fields';
-        for(const item of category.items)addItem(item,itemIndex++,fields);
+        for(const item of category.items)if(visible(item))addItem(item,itemIndex++,fields);
         head.append(title,plus);card.append(head,form,fields);outer.append(card);
       }
       renderTotal();
     }
-    function renderTotal(){let total=0n;for(const name of allNames()){if(amounts[name])total+=BigInt(amounts[name])}$('total').textContent='$'+fmt(total.toString())}
+    function renderTotal(){let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount)}$('total').textContent='$'+fmt(total.toString())}
     function weeksInMonth(year,month){
       const last=new Date(year,month+1,0).getDate();
       const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
@@ -287,7 +336,7 @@
       $('month-title').textContent=`${MONTHS[view.month]} ${view.year}`;
       $('today-button').hidden=current;
     }
-    function render(){renderHeader();read();renderExpenses();renderWeeks()}
+    function render(){renderHeader();read();readEntries();renderExpenses();renderWeeks()}
     function go(delta){
       const target=shift(viewYM(),delta),base=baseYM();selected=same(target,base)?null:target;
       render();
