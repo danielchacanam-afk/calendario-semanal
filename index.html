@@ -114,6 +114,10 @@
     #cartola-input{width:180px;max-width:100%;min-width:80px;text-align:right;padding:8px;border:1px solid #cfd9e3;border-radius:8px;font-size:18px;color:#182b42}
     .cartola-save,.cartola-cancel{background:white;border:1px solid #dce4ec;border-radius:7px;min-width:40px;min-height:40px;font-size:22px;cursor:pointer}.cartola-save{color:#15803d}.cartola-cancel{color:#c42020}
     #cartola-error{flex-basis:100%;color:#b42424;font-size:12px;margin:0}#cartola-error:empty{display:none}
+    .item-agenda{border:0;background:none;padding:3px;color:#2767a8;cursor:pointer;display:inline-flex;align-items:center}.item-agenda[hidden],.parts-panel[hidden]{display:none}
+    .parts-panel{border:1px solid #dce4ec;border-radius:9px;padding:10px;background:#f6f8fb;font-size:12px;grid-column:1 / -1}.parts-panel>strong{display:block;margin-bottom:8px}
+    .part-row{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto auto;gap:4px;margin:7px 0}.part-add{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}
+    .part-row input{min-width:0;width:100%;padding:7px 4px;border:1px solid #cfd9e3;border-radius:6px;background:#fff;font-size:12px}.part-row button{padding:4px;border:1px solid #dce4ec;border-radius:5px;background:white;min-height:32px;cursor:pointer}.part-save{color:#15803d}.part-delete{color:#c42020}.parts-note{font-size:11px;color:#64768a}
   </style>
 </head>
 <body>
@@ -235,15 +239,23 @@
       if(data&&typeof data==='object'&&!Array.isArray(data)){
         for(const [name,history] of Object.entries(data)){
           if(!history||typeof history!=='object'||Array.isArray(history))continue;
-          const valid=Object.fromEntries(Object.entries(history).filter(([month,value])=>/^\d{4}-\d{2}$/.test(month)&&typeof value==='string'&&/^\d+$/.test(value)));
+          const valid=Object.fromEntries(Object.entries(history).filter(([month,value])=>/^\d{4}-\d{2}$/.test(month)&&((typeof value==='string'&&/^\d+$/.test(value))||validParts(value))));
           Object.defineProperty(budgets,name,{value:valid,enumerable:true,writable:true,configurable:true});
         }
       }
     }catch(e){budgetStorageError=true}
-    function budgetFor(name){
+    function validParts(value){return value&&typeof value==='object'&&Array.isArray(value.parts)&&value.parts.length<=100&&value.parts.every(p=>p&&typeof p.name==='string'&&p.name.trim().length>0&&p.name.length<=100&&typeof p.amount==='string'&&/^\d+$/.test(p.amount))}
+    function budgetSource(name){
       const month=ym(viewYM().year,viewYM().month),history=budgets[name]||{};
       const effective=Object.keys(history).filter(key=>key<=month).sort().pop();
       return effective===undefined?null:history[effective];
+    }
+    function partsFor(name){const value=budgetSource(name);return validParts(value)?value.parts:null}
+    function budgetFor(name){
+      const month=ym(viewYM().year,viewYM().month),history=budgets[name]||{};
+      const effective=Object.keys(history).filter(key=>key<=month).sort().pop();
+      const value=effective===undefined?null:history[effective];
+      return validParts(value)?value.parts.reduce((sum,p)=>sum+BigInt(p.amount),0n).toString():value;
     }
     function saveBudget(name,value){
       const month=ym(viewYM().year,viewYM().month);
@@ -357,9 +369,11 @@
       const heading=document.createElement('div');heading.className='expense-heading';
       const label=document.createElement('button');label.type='button';label.className='expense-name';label.textContent=item;
       const remove=document.createElement('button');remove.type='button';remove.className='delete-item';remove.textContent='×';remove.hidden=true;remove.setAttribute('aria-label',`Eliminar ${item} desde este mes`);
+      const agenda=document.createElement('button');agenda.type='button';agenda.className='item-agenda';agenda.hidden=true;agenda.setAttribute('aria-label',`Abrir subítems de ${item}`);agenda.setAttribute('aria-expanded','false');
+      agenda.innerHTML='<svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="5" y="3" width="15" height="18" rx="2"/><path d="M8 3v18M3 7h4M3 12h4M3 17h4M11 8h6M11 12h6M11 16h4"/></svg>';
       label.setAttribute('aria-expanded','false');
-      label.addEventListener('click',()=>{remove.hidden=!remove.hidden;label.setAttribute('aria-expanded',String(!remove.hidden))});
-      remove.addEventListener('click',()=>removeItem(item));heading.append(label,remove);
+      label.addEventListener('click',()=>{remove.hidden=!remove.hidden;agenda.hidden=remove.hidden;label.setAttribute('aria-expanded',String(!remove.hidden))});
+      remove.addEventListener('click',()=>removeItem(item));heading.append(label,remove,agenda);
       const budgetBox=document.createElement('div');budgetBox.className='budget-box';
       const budgetInput=document.createElement('input');budgetInput.className='budget-input';budgetInput.type='text';budgetInput.inputMode='numeric';budgetInput.maxLength=24;budgetInput.placeholder='Presupuesto';budgetInput.setAttribute('aria-label',`Presupuesto de ${item}`);
       const budgetActions=document.createElement('div');budgetActions.className='budget-actions';budgetActions.hidden=true;
@@ -377,7 +391,7 @@
         budgetInput.style.color=ratio>50?`hsl(${40+(ratio-50)*1.6}, 85%, 28%)`:`hsl(${ratio*.8}, 85%, 35%)`;
         budgetInput.title=`Presupuesto: $${fmt(original)} · Gastado: $${fmt(spent.toString())} · Disponible: ${budgetInput.value}`;
       }
-      budgetInput.addEventListener('focus',()=>{if(editingBudget)return;editingBudget=true;budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
+      budgetInput.addEventListener('focus',()=>{if(partsFor(item)!==null){budgetInput.blur();return}if(editingBudget)return;editingBudget=true;budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
       budgetInput.addEventListener('input',()=>{budgetInput.value=fmt(clean(budgetInput.value))});
       function closeBudget(){editingBudget=false;budgetActions.hidden=true;renderBudget()}
       function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value)){closeBudget();renderTotal()}}
@@ -385,6 +399,34 @@
       budgetInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commitBudget()}if(event.key==='Escape'){event.preventDefault();closeBudget()}});
       budgetActions.append(confirmBudget,cancelBudget);budgetBox.append(budgetInput,budgetActions);heading.append(budgetBox);
       renderBudget();
+      const partsPanel=document.createElement('section');partsPanel.className='parts-panel';partsPanel.hidden=true;partsPanel.setAttribute('aria-label',`Subítems de ${item}`);
+      agenda.addEventListener('click',()=>{partsPanel.hidden=!partsPanel.hidden;agenda.setAttribute('aria-expanded',String(!partsPanel.hidden));if(!partsPanel.hidden)renderParts()});
+      function saveParts(parts){
+        if(saveBudget(item,{parts})){renderParts();renderBudget();renderTotal();return true}
+        partsError.textContent='No se pudo guardar. Revisa la sincronización.';return false;
+      }
+      const partsError=document.createElement('p');partsError.className='new-expense-error';partsError.setAttribute('role','alert');
+      function renderParts(){
+        partsPanel.replaceChildren();
+        const title=document.createElement('strong');title.textContent='Subítems del presupuesto';partsPanel.append(title);
+        (partsFor(item)||[]).forEach((part,index)=>{
+          const row=document.createElement('form');row.className='part-row';
+          const name=document.createElement('input');name.type='text';name.maxLength=100;name.required=true;name.value=part.name;name.setAttribute('aria-label','Nombre del subítem');
+          const amount=document.createElement('input');amount.type='text';amount.inputMode='numeric';amount.maxLength=24;amount.required=true;amount.value=fmt(part.amount);amount.setAttribute('aria-label',`Monto de ${part.name}`);amount.addEventListener('input',()=>{amount.value=fmt(clean(amount.value))});
+          const save=document.createElement('button');save.type='submit';save.textContent='✓';save.className='part-save';save.setAttribute('aria-label',`Guardar subítem ${part.name}`);
+          const del=document.createElement('button');del.type='button';del.textContent='×';del.className='part-delete';del.setAttribute('aria-label',`Eliminar subítem ${part.name}`);
+          row.addEventListener('submit',e=>{e.preventDefault();const n=name.value.trim().replace(/\s+/g,' '),v=clean(amount.value);if(!n||!v)return;const parts=(partsFor(item)||[]).slice();parts[index]={name:n,amount:v};saveParts(parts)});
+          del.addEventListener('click',()=>saveParts((partsFor(item)||[]).filter((_,i)=>i!==index)));
+          row.append(name,amount,save,del);partsPanel.append(row);
+        });
+        const addForm=document.createElement('form');addForm.className='part-row part-add';
+        const name=document.createElement('input');name.type='text';name.placeholder='Nuevo subítem';name.maxLength=100;name.required=true;name.setAttribute('aria-label','Nombre del nuevo subítem');
+        const amount=document.createElement('input');amount.type='text';amount.inputMode='numeric';amount.placeholder='Monto';amount.maxLength=24;amount.required=true;amount.setAttribute('aria-label','Monto del nuevo subítem');amount.addEventListener('input',()=>{amount.value=fmt(clean(amount.value))});
+        const add=document.createElement('button');add.type='submit';add.textContent='Agregar';add.className='part-save';
+        addForm.addEventListener('submit',e=>{e.preventDefault();const n=name.value.trim().replace(/\s+/g,' '),v=clean(amount.value),parts=partsFor(item)||[];if(!n||!v)return;if(parts.length>=100){partsError.textContent='Máximo 100 subítems.';return}saveParts([...parts,{name:n,amount:v}])});
+        addForm.append(name,amount,add);partsPanel.append(addForm);
+        const note=document.createElement('p');note.className='parts-note';note.textContent='La suma define el presupuesto desde este mes en adelante.';partsError.textContent='';partsPanel.append(note,partsError);
+      }
       const id=`expense-${index}`;
       const wrap=document.createElement('div');wrap.className='amount-wrap';
       const prefix=document.createElement('span');prefix.className='currency';prefix.textContent='$';prefix.setAttribute('aria-hidden','true');
@@ -437,7 +479,7 @@
         });
       }
       renderRecords();
-      wrap.append(prefix,input,register);div.append(heading,wrap,records);container.append(div);
+      wrap.append(prefix,input,register);div.append(heading,wrap,records,partsPanel);container.append(div);
     }
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
