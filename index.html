@@ -120,7 +120,7 @@
     <section class="weeks-section" aria-labelledby="weeks-heading">
       <h2 class="weeks-title" id="weeks-heading">Semanas del mes</h2>
       <div id="weeks" class="week-list"></div>
-      <p class="footer-note">Semanas de lunes a domingo, incluyendo los días de inicio y fin del mes. Los totales reúnen los gastos registrados de todas las categorías.</p>
+      <p class="footer-note">Semanas de lunes a domingo con más de tres días dentro del mes. Los gastos de días excluidos se suman a la primera o última semana visible.</p>
     </section>
   </main>
 
@@ -304,8 +304,10 @@
         if(event.key==='Enter'){
           event.preventDefault();const digits=clean(input.value);
           if(!digits||BigInt(digits)===0n)return;
-          if(!expenseDate.value){expenseDate.reportValidity();expenseDate.focus();return}
-          if(recordAmount(item,digits,expenseDate.value)){input.value='';renderRecords();renderBudget();renderTotal();renderWeeks()}
+          const view=viewYM(),now=today();
+          const day=Math.min(now.getDate(),new Date(view.year,view.month+1,0).getDate());
+          const recordedDate=ym(view.year,view.month)+'-'+String(day).padStart(2,'0');
+          if(recordAmount(item,digits,recordedDate)){input.value='';renderRecords();renderBudget();renderTotal();renderWeeks()}
           return;
         }
         const i=input.selectionStart;
@@ -325,12 +327,6 @@
         if(digits)amounts[item]=digits;else delete amounts[item];
         save();renderTotal();
       });
-      const dateLabel=document.createElement('label');dateLabel.className='expense-date-label';dateLabel.textContent='Fecha del gasto';
-      const expenseDate=document.createElement('input');expenseDate.type='date';expenseDate.className='expense-date';expenseDate.setAttribute('aria-label',`Fecha del gasto en ${item}`);
-      const view=viewYM(),monthKey=ym(view.year,view.month),now=today();
-      expenseDate.min=monthKey+'-01';expenseDate.max=monthKey+'-'+new Date(view.year,view.month+1,0).getDate();
-      expenseDate.value=same(view,baseYM())?monthKey+'-'+String(now.getDate()).padStart(2,'0'):'';
-      expenseDate.required=true;dateLabel.append(expenseDate);
       const records=document.createElement('div');records.className='expense-records';records.setAttribute('aria-live','polite');
       function renderRecords(){
         records.replaceChildren();
@@ -341,12 +337,11 @@
           const removeRecord=document.createElement('button');removeRecord.type='button';removeRecord.className='delete-item';removeRecord.textContent='×';removeRecord.hidden=true;removeRecord.setAttribute('aria-label',`Borrar gasto de $${fmt(amount)} en ${item}`);
           value.addEventListener('click',()=>{removeRecord.hidden=!removeRecord.hidden;value.setAttribute('aria-expanded',String(!removeRecord.hidden))});
           removeRecord.addEventListener('click',()=>{if(deleteRecord(item,recordIndex)){renderRecords();renderBudget();renderTotal();renderWeeks()}});
-          const dateText=document.createElement('span');dateText.className='record-date';dateText.textContent=record.date?record.date.split('-').reverse().join('/'):'Sin fecha';
-          value.append(dateText);line.append(value,removeRecord);records.append(line);
+          line.append(value,removeRecord);records.append(line);
         });
       }
       renderRecords();
-      wrap.append(prefix,input);div.append(heading,wrap,dateLabel,records);container.append(div);
+      wrap.append(prefix,input);div.append(heading,wrap,records);container.append(div);
     }
     function renderExpenses(){
       const outer=$('categories');outer.replaceChildren();let itemIndex=0;
@@ -400,7 +395,7 @@
       const weeks=[];
       for(let start=1-mondayOffset;start<=last;start+=7){
         const a=Math.max(1,start),b=Math.min(last,start+6);
-        weeks.push({a,b});
+        if(b-a+1>3)weeks.push({a,b});
       }
       return weeks;
     }
@@ -411,11 +406,13 @@
       const totals=weeks.map(()=>0n);let undated=0n;
       for(const records of Object.values(entries))for(const record of records){
         if(!record.date||record.date.slice(0,7)!==ym(year,month)){undated+=BigInt(record.amount);continue}
-        const day=Number(record.date.slice(8)),index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
+        const day=Number(record.date.slice(8));
+        let index=weeks.findIndex(w=>day>=w.a&&day<=w.b);
+        if(index<0&&weeks.length)index=day<weeks[0].a?0:weeks.length-1;
         if(index>=0)totals[index]+=BigInt(record.amount);
       }
       for(let i=0;i<weeks.length;i++){
-        const w=weeks[i];const active=current&&now.getDate()>=w.a&&now.getDate()<=w.b;
+        const w=weeks[i];const active=current&&now.getDate()>=(i===0?1:w.a)&&now.getDate()<=(i===weeks.length-1?new Date(year,month+1,0).getDate():w.b);
         const card=document.createElement('div');card.className='week'+(active?' current':'');
         const num=document.createElement('div');num.className='week-num';num.textContent=String(i+1);
         const body=document.createElement('div');
