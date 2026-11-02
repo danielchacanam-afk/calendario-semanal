@@ -98,6 +98,7 @@
     #cloud-login input{border:1px solid #cfd9e3;border-radius:8px;padding:10px;width:100%}
     .cloud-actions{display:flex;gap:8px;flex-wrap:wrap}.cloud-actions button{border:1px solid #cfd9e3;border-radius:8px;background:white;color:#173b62;padding:8px 12px}
     .cloud-actions button[type=submit]{background:#173b62;color:#fff}#cloud-login-error{color:#b42424;margin:0}#cloud-status{margin:10px 0 0}
+    .cloud-panel summary{cursor:pointer;font-size:14px;font-weight:650;color:#64768a}.cloud-panel[open] summary{margin-bottom:14px}.cloud-panel:not([open]){padding:12px 16px;background:transparent;box-shadow:none}
   </style>
 </head>
 <body>
@@ -108,24 +109,6 @@
     </div>
   </header>
   <main>
-    <section class="cloud-panel" aria-label="Cuenta y sincronización">
-      <h2>Tu calendario en todos tus dispositivos</h2>
-      <form id="cloud-login">
-        <p>Usa el mismo correo y contraseña en el computador y en el celular. Si es tu primera vez, crea tu cuenta aquí.</p>
-        <label>Correo electrónico<input id="cloud-email" type="email" autocomplete="username" required></label>
-        <label>Contraseña<input id="cloud-password" type="password" autocomplete="current-password" minlength="6" required></label>
-        <div class="cloud-actions"><button type="submit">Entrar</button><button id="cloud-create" type="button">Crear cuenta</button><button id="cloud-reset" type="button">Olvidé mi contraseña</button></div>
-        <p id="cloud-login-error" role="alert"></p>
-      </form>
-      <div id="cloud-account" class="cloud-actions" hidden>
-        <button id="cloud-import" type="button" hidden>Importar datos anteriores de este navegador</button>
-        <button id="legacy-backup" type="button" hidden>Descargar respaldo anterior</button>
-        <button id="cloud-backup" type="button">Descargar respaldo</button>
-        <button id="cloud-reload" type="button" hidden>Recargar datos de la nube</button>
-        <button id="cloud-signout" type="button">Cerrar sesión</button>
-      </div>
-      <p id="cloud-status" role="status">Conectando… Si no carga, revisa tu conexión y recarga la página.</p>
-    </section>
     <div id="calendar-fields" hidden>
 
     <section class="month-section" aria-label="Seleccionar mes">
@@ -153,6 +136,24 @@
       <p class="footer-note">Semanas de lunes a domingo con más de tres días dentro del mes. Los gastos de días excluidos se suman a la primera o última semana visible.</p>
     </section>
     </div>
+    <details id="cloud-options" class="cloud-panel" open>
+      <summary>Cuenta y respaldos</summary>
+      <form id="cloud-login">
+        <p>Usa el mismo correo y contraseña en el computador y en el celular. Si es tu primera vez, crea tu cuenta aquí.</p>
+        <label>Correo electrónico<input id="cloud-email" type="email" autocomplete="username" required></label>
+        <label>Contraseña<input id="cloud-password" type="password" autocomplete="current-password" minlength="6" required></label>
+        <div class="cloud-actions"><button type="submit">Entrar</button><button id="cloud-create" type="button">Crear cuenta</button><button id="cloud-reset" type="button">Olvidé mi contraseña</button></div>
+        <p id="cloud-login-error" role="alert"></p>
+      </form>
+      <div id="cloud-account" class="cloud-actions" hidden>
+        <button id="cloud-import" type="button" hidden>Importar datos anteriores de este navegador</button>
+        <button id="legacy-backup" type="button" hidden>Descargar respaldo anterior</button>
+        <button id="cloud-backup" type="button">Descargar respaldo</button>
+        <button id="cloud-reload" type="button" hidden>Recargar datos de la nube</button>
+        <button id="cloud-signout" type="button">Cerrar sesión</button>
+      </div>
+      <p id="cloud-status" role="status">Conectando… Si no carga, revisa tu conexión y recarga la página.</p>
+    </details>
   </main>
 
   <script>
