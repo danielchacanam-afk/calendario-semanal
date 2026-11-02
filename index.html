@@ -76,6 +76,14 @@
     @media(max-width:780px){.categories{grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}}
     @media(max-width:570px){.month-section{margin-top:23px}.expenses-section{margin-top:26px}.categories{grid-template-columns:1fr}.category{padding:15px}.category-fields{gap:13px}.category-header{margin-bottom:15px}.expense{display:grid;grid-template-columns:minmax(0,1fr) minmax(125px,43%);align-items:center;gap:10px}.expense label{font-size:13px}.section-heading{font-size:21px}.total-bar{align-items:baseline}.nav-button{font-size:13px;padding:8px 10px}}
     @media(max-width:370px){.expense{grid-template-columns:minmax(0,1fr) minmax(108px,43%)}}
+
+    .expense-records{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px 0;position:relative;isolation:isolate}
+    .expense-records:not(:empty)::before,.expense-records:not(:empty)::after{content:'';position:absolute;top:0;bottom:0;width:1px;background:#d1d5db;pointer-events:none;z-index:-1}
+    .expense-records:not(:empty)::before{left:33.333333%}.expense-records:not(:empty)::after{left:66.666667%}
+    .expense-record{min-width:0;display:flex;align-items:flex-start;flex-wrap:wrap;gap:2px;margin:0;padding:0 6px}
+    .expense-record:nth-child(3n+1){padding-left:0}
+    .record-amount{max-width:100%;overflow-wrap:anywhere;font-size:12px}
+    .expense-record .delete-item{font-size:18px;padding:0 2px}
   </style>
 </head>
 <body>
