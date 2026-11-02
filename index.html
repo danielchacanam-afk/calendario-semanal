@@ -109,6 +109,11 @@
     .register-expense{flex:0 0 auto;min-height:36px;padding:6px 10px;border:0;border-radius:7px;background:#173b62;color:#fff;font-size:12px;font-weight:700;cursor:pointer}
     .register-expense:disabled{background:#e8edf3;color:#7b8997;cursor:default}.amount-wrap{padding-right:4px}
     @media(max-width:570px){.amount-wrap{height:46px}.register-expense{min-height:38px}.amount{font-size:16px}}
+    .expense-total-bar{color:#c42020}.cartola-bar{margin-top:0;border-top:0;padding-top:10px}.cartola-bar>strong{color:#15803d}
+    .cartola-display{border:0;background:none;padding:4px 0;color:#15803d;cursor:pointer}.cartola-form{display:flex;align-items:center;gap:7px;max-width:100%;flex-wrap:wrap}.cartola-form[hidden]{display:none}
+    #cartola-input{width:180px;max-width:100%;min-width:80px;text-align:right;padding:8px;border:1px solid #cfd9e3;border-radius:8px;font-size:18px;color:#182b42}
+    .cartola-save,.cartola-cancel{background:white;border:1px solid #dce4ec;border-radius:7px;min-width:40px;min-height:40px;font-size:22px;cursor:pointer}.cartola-save{color:#15803d}.cartola-cancel{color:#c42020}
+    #cartola-error{flex-basis:100%;color:#b42424;font-size:12px;margin:0}#cartola-error:empty{display:none}
   </style>
 </head>
 <body>
@@ -136,6 +141,16 @@
       <h2 class="section-heading" id="expense-heading">Gastos Mensuales</h2>
       <div class="categories" id="categories"></div>
       <div class="total-bar"><strong>Presupuesto Total</strong><output id="budget-total" class="total-number" aria-label="Presupuesto Total">$0</output></div>
+      <div class="total-bar cartola-bar">
+        <strong>Cuenta en cartola</strong>
+        <button type="button" id="cartola-display" class="total-number cartola-display" aria-label="Editar Cuenta en cartola">$0</button>
+        <form id="cartola-form" class="cartola-form" hidden>
+          <span aria-hidden="true">$</span><input id="cartola-input" type="text" inputmode="numeric" maxlength="24" aria-label="Monto original de Cuenta en cartola" autocomplete="off">
+          <button type="submit" class="cartola-save" aria-label="Guardar Cuenta en cartola">✓</button>
+          <button type="button" id="cartola-cancel" class="cartola-cancel" aria-label="Cancelar cambio de Cuenta en cartola">×</button>
+        </form>
+        <p id="cartola-error" role="alert"></p>
+      </div>
       <div class="total-bar expense-total-bar"><strong>Total gastos mensuales</strong><output id="total" class="total-number" aria-label="Total gastos mensuales">$0</output></div>
       <p class="storage-note">Pulsa Registrar o Enter para guardar un gasto debajo del ítem. Pulsa su nombre y luego la × roja para eliminarlo desde el mes seleccionado en adelante. El presupuesto junto al nombre muestra el saldo disponible; al editarlo, ✓ guarda el límite desde este mes en adelante y × cancela. Pulsa un gasto para mostrar su × roja y borrarlo. Los gastos se guardan por mes y se sincronizan con tu cuenta en todos tus dispositivos. Espera a ver “Sincronizado” antes de cerrar.</p>
       <p class="storage-error" id="storage-error" role="status">No se pudo guardar el cambio. Revisa el estado de sincronización antes de continuar.</p>
@@ -197,6 +212,23 @@
     const ORIGINAL_NAMES=new Set(CATEGORIES.flatMap(c=>c.items));
     const CUSTOM_NAMES_KEY='calendario-semanal:conceptos-personalizados:v1';
     const allNames=()=>CATEGORIES.flatMap(c=>c.items);
+    let editingCartola=false;
+    const cartolaKey=()=>`calendario-semanal:cartola:v1:${ym(viewYM().year,viewYM().month)}`;
+    function readCartola(){
+      try{const value=JSON.parse(window.calendarStorage.getItem(cartolaKey())||'null');if(value&&typeof value.amount==='string'&&/^\d+$/.test(value.amount))return value.amount}catch{}
+      return null;
+    }
+    function renderCartola(total){
+      if(editingCartola)return;
+      const original=readCartola(),button=$('cartola-display');
+      if(original===null){button.textContent='Anotar monto';button.style.color='#15803d';button.title='Anotar el monto original de este mes';return}
+      const remaining=BigInt(original)-total;
+      button.textContent=(remaining<0n?'- $':'$')+fmt((remaining<0n?-remaining:remaining).toString());
+      const ratio=BigInt(original)>0n?Math.max(0,Math.min(100,Number(remaining*100n/BigInt(original)))):0;
+      button.style.color=ratio>50?`hsl(${40+(ratio-50)*1.6}, 85%, 28%)`:`hsl(${ratio*.8}, 85%, 35%)`;
+      button.title=`Monto original: $${fmt(original)} · Gastos mensuales: $${fmt(total.toString())}`;
+    }
+    function closeCartola(){editingCartola=false;$('cartola-form').hidden=true;$('cartola-display').hidden=false;$('cartola-error').textContent='';renderTotal()}
     const BUDGET_KEY='calendario-semanal:presupuestos:v1';
     let budgets={},budgetStorageError=false;
     try{
@@ -476,7 +508,7 @@
       let totalBudget=0n;
       for(const name of allNames()){if(visible(name)){const budget=budgetFor(name);if(budget!==null)totalBudget+=BigInt(budget)}}
       $('budget-total').textContent='$'+fmt(totalBudget.toString());
-let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString())}
+let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts[name])total+=BigInt(amounts[name]);for(const amount of entries[name]||[])total+=BigInt(amount.amount)}$('total').textContent='$'+fmt(total.toString());renderCartola(total)}
     function weeksInMonth(year,month){
       const last=new Date(year,month+1,0).getDate();
       const mondayOffset=(new Date(year,month,1).getDay()+6)%7;
@@ -523,11 +555,24 @@ let total=0n;for(const name of allNames()){if(!visible(name))continue;if(amounts
       $('month-title').textContent=`${MONTHS[view.month]} ${view.year}`;
       $('today-button').hidden=current;
     }
-    function render(){renderHeader();read();readEntries();renderExpenses();renderWeeks()}
+    function render(){editingCartola=false;$('cartola-form').hidden=true;$('cartola-display').hidden=false;$('cartola-error').textContent='';renderHeader();read();readEntries();renderExpenses();renderWeeks()}
     function go(delta){
       const target=shift(viewYM(),delta),base=baseYM();selected=same(target,base)?null:target;
       render();
     }
+    $('cartola-display').addEventListener('click',()=>{
+      editingCartola=true;$('cartola-display').hidden=true;$('cartola-form').hidden=false;
+      $('cartola-input').value=fmt(readCartola()||'');$('cartola-input').focus();$('cartola-input').select();
+    });
+    $('cartola-input').addEventListener('input',()=>{$('cartola-input').value=fmt(clean($('cartola-input').value));$('cartola-error').textContent=''});
+    $('cartola-input').addEventListener('keydown',event=>{if(event.key==='Escape'){event.preventDefault();closeCartola()}});
+    $('cartola-cancel').addEventListener('click',closeCartola);
+    $('cartola-form').addEventListener('submit',event=>{
+      event.preventDefault();const value=clean($('cartola-input').value);
+      if(!value){$('cartola-error').textContent='Ingresa el monto original de este mes.';return}
+      try{window.calendarStorage.setItem(cartolaKey(),JSON.stringify({amount:value}));closeCartola()}
+      catch{$('cartola-error').textContent='No se pudo guardar. Revisa la sincronización.'}
+    });
     $('prev').addEventListener('click',()=>go(-1));$('next').addEventListener('click',()=>go(1));
     $('today-button').addEventListener('click',()=>{selected=null;render()});
     render();
