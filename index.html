@@ -2,7 +2,7 @@
 <html lang="es-CL">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
   <meta name="theme-color" content="#173b62">
   <meta name="description" content="Calendario semanal y calculadora de gastos mensuales en pesos chilenos.">
   <link rel="icon" type="image/png" sizes="128x128" href="./favicon-transparent.png?v=1">
@@ -230,28 +230,37 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
   <script>
   window.startCalendar = () => {
     'use strict';
-    let transientEdit=null,editViewportMin=0;
+    let transientEdit=null,editViewportMin=0,keyboardWasOpen=false;
+    const editMarker='calendarEditing';
+    function viewportHeight(){return Math.min(innerHeight,window.visualViewport?.height||innerHeight)}
     function beginTransientEdit(cancel){
-      if(!window.matchMedia('(max-width:570px)').matches)return;
-      const reuse=!!transientEdit;
+      if(!window.matchMedia('(max-width:570px), (pointer:coarse)').matches)return;
       if(transientEdit){const previous=transientEdit;transientEdit=null;previous()}
-      if(!reuse)history.pushState({...history.state,calendarEditing:true},'');
-      transientEdit=cancel;editViewportMin=window.visualViewport?.height||innerHeight;
+      if(!history.state?.[editMarker])history.pushState({...history.state,[editMarker]:true},'');
+      transientEdit=cancel;editViewportMin=viewportHeight();keyboardWasOpen=false;
     }
     function endTransientEdit(cancel){
-      if(transientEdit!==cancel)return;
-      transientEdit=null;
-      if(history.state?.calendarEditing)history.back();
+      if(transientEdit===cancel)transientEdit=null;
+      // Keep this same-page history entry until the next real Back action.
+      // Calling history.back() here can let Android's next Back close the tab.
     }
     window.addEventListener('popstate',()=>{
       if(!transientEdit)return;
       const cancel=transientEdit;transientEdit=null;cancel();
     });
-    window.visualViewport?.addEventListener('resize',()=>{
+    function observeKeyboard(){
       if(!transientEdit)return;
-      const height=window.visualViewport.height;
-      if(height>editViewportMin+120){const cancel=transientEdit;cancel()}
-      else editViewportMin=Math.min(editViewportMin,height);
+      const height=viewportHeight();
+      if(height<editViewportMin-70)keyboardWasOpen=true;
+      if(keyboardWasOpen&&height>editViewportMin+70){const cancel=transientEdit;cancel();return}
+      editViewportMin=Math.min(editViewportMin,height);
+    }
+    window.addEventListener('resize',observeKeyboard);
+    window.visualViewport?.addEventListener('resize',observeKeyboard);
+    navigator.virtualKeyboard?.addEventListener('geometrychange',()=>{
+      if(!transientEdit)return;
+      if(navigator.virtualKeyboard.boundingRect.height>0)keyboardWasOpen=true;
+      else if(keyboardWasOpen){const cancel=transientEdit;cancel()}
     });
     const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const CATEGORIES = [
@@ -489,6 +498,9 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
       }
       budgetInput.addEventListener('focus',()=>{if(partsFor(item)!==null){budgetInput.blur();return}if(editingBudget)return;editingBudget=true;beginTransientEdit(cancelBudgetBack);budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
       budgetInput.addEventListener('input',()=>{budgetInput.value=fmt(clean(budgetInput.value))});
+      budgetInput.addEventListener('blur',event=>{
+        if(editingBudget&&!budgetActions.contains(event.relatedTarget))closeBudget();
+      });
       function cancelBudgetBack(){closeBudget()}
       function closeBudget(){endTransientEdit(cancelBudgetBack);editingBudget=false;budgetActions.hidden=true;budgetInput.blur();renderBudget()}
       function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value)){closeBudget();renderTotal()}}
