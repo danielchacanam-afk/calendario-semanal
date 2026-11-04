@@ -230,6 +230,29 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
   <script>
   window.startCalendar = () => {
     'use strict';
+    let transientEdit=null,editViewportMin=0;
+    function beginTransientEdit(cancel){
+      if(!window.matchMedia('(max-width:570px)').matches)return;
+      const reuse=!!transientEdit;
+      if(transientEdit){const previous=transientEdit;transientEdit=null;previous()}
+      if(!reuse)history.pushState({...history.state,calendarEditing:true},'');
+      transientEdit=cancel;editViewportMin=window.visualViewport?.height||innerHeight;
+    }
+    function endTransientEdit(cancel){
+      if(transientEdit!==cancel)return;
+      transientEdit=null;
+      if(history.state?.calendarEditing)history.back();
+    }
+    window.addEventListener('popstate',()=>{
+      if(!transientEdit)return;
+      const cancel=transientEdit;transientEdit=null;cancel();
+    });
+    window.visualViewport?.addEventListener('resize',()=>{
+      if(!transientEdit)return;
+      const height=window.visualViewport.height;
+      if(height>editViewportMin+120){const cancel=transientEdit;cancel()}
+      else editViewportMin=Math.min(editViewportMin,height);
+    });
     const MONTHS=['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
     const CATEGORIES = [
       {name:'Transferencias recurrentes',items:['Sofi | Administración','Contadora','Carla Podesta | Música','Mensualidad colegio']},
@@ -464,9 +487,10 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
         budgetInput.style.color=ratio>50?`hsl(${40+(ratio-50)*1.6}, 85%, 28%)`:`hsl(${ratio*.8}, 85%, 35%)`;
         budgetInput.title=`Presupuesto: $${fmt(original)} · Gastado: $${fmt(spent.toString())} · Disponible: ${budgetInput.value}`;
       }
-      budgetInput.addEventListener('focus',()=>{if(partsFor(item)!==null){budgetInput.blur();return}if(editingBudget)return;editingBudget=true;budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
+      budgetInput.addEventListener('focus',()=>{if(partsFor(item)!==null){budgetInput.blur();return}if(editingBudget)return;editingBudget=true;beginTransientEdit(cancelBudgetBack);budgetInput.value=fmt(budgetFor(item)||'');budgetInput.style.color='#182b42';budgetActions.hidden=false});
       budgetInput.addEventListener('input',()=>{budgetInput.value=fmt(clean(budgetInput.value))});
-      function closeBudget(){editingBudget=false;budgetActions.hidden=true;renderBudget()}
+      function cancelBudgetBack(){closeBudget()}
+      function closeBudget(){endTransientEdit(cancelBudgetBack);editingBudget=false;budgetActions.hidden=true;budgetInput.blur();renderBudget()}
       function commitBudget(){const value=clean(budgetInput.value);if(value&&saveBudget(item,value)){closeBudget();renderTotal()}}
       confirmBudget.addEventListener('click',commitBudget);cancelBudget.addEventListener('click',closeBudget);
       budgetInput.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();commitBudget()}if(event.key==='Escape'){event.preventDefault();closeBudget()}});
@@ -737,7 +761,7 @@ let total=0n;
       $('month-title').textContent=`${MONTHS[view.month]} ${view.year}`;
       $('today-button').hidden=current;
     }
-    function render(){editingCartola=false;$('cartola-form').hidden=true;$('cartola-display').hidden=false;$('cartola-error').textContent='';renderHeader();read();readEntries();renderExpenses();renderWeeks()}
+    function render(){if(transientEdit){const cancel=transientEdit;cancel()}editingCartola=false;$('cartola-form').hidden=true;$('cartola-display').hidden=false;$('cartola-error').textContent='';renderHeader();read();readEntries();renderExpenses();renderWeeks()}
     function go(delta){
       const target=shift(viewYM(),delta),base=baseYM();selected=same(target,base)?null:target;
       render();
