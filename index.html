@@ -149,10 +149,13 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
 }
 
 
-    body{background:radial-gradient(ellipse at 0 0,rgba(112,73,255,.72),transparent 65%),radial-gradient(ellipse at 100% 10%,rgba(0,222,174,.8),transparent 60%),linear-gradient(145deg,#819bf4 0%,#b4c4fa 45%,#86dace 100%);background-attachment:scroll;min-height:100vh}
+    body{background:linear-gradient(rgba(255,255,255,.5),rgba(255,255,255,.5)),radial-gradient(ellipse at 0 0,rgba(112,73,255,.72),transparent 65%),radial-gradient(ellipse at 100% 10%,rgba(0,222,174,.8),transparent 60%),linear-gradient(145deg,#819bf4 0%,#b4c4fa 45%,#86dace 100%);background-attachment:scroll;min-height:100vh}
     .app-header{background:rgba(255,255,255,.88)}.summary-heading>span,.categories-heading>span{color:#414575}.summary-heading h2,.categories-heading h2{color:#20234e}
     .month-section{padding-bottom:52px;background-size:cover;background-position:center}.cover-tools{display:flex;gap:8px;position:absolute;right:24px;bottom:16px}.cover-tools button{font:inherit;font-size:11px;color:white;border:1px solid rgba(255,255,255,.35);background:rgba(30,28,83,.2);border-radius:10px;padding:7px 10px;cursor:pointer;backdrop-filter:blur(8px)}.cover-tools button:hover{background:rgba(30,28,83,.4)}#cover-error{font-size:12px;color:white;margin:10px 0 0;max-width:75%}#cover-error:empty{display:none}.has-cover .month-title,.has-cover .month-eyebrow,.has-cover .month-meta{text-shadow:0 1px 8px rgba(0,0,0,.35)}.summary-grid .total-bar:first-child{background:linear-gradient(110deg,#fff,#e8fbf3)}
     @media(max-width:570px){.month-section{padding-bottom:55px}.cover-tools{right:16px;bottom:14px;gap:6px}.cover-tools button{font-size:10px;padding:6px 9px}#cover-error{max-width:100%}.summary-grid .total-bar:first-child .cartola-display{font-size:32px}.cloud-panel:not([open]){background:rgba(255,255,255,.6)}}
+    .summary-heading,.categories-heading{padding:12px 16px;border-radius:17px;background:rgba(74,57,141,.12);border:1px solid rgba(255,255,255,.35);backdrop-filter:blur(12px)}
+    .summary-heading h2,.categories-heading h2{color:#29264d}.summary-heading>span,.categories-heading>span{color:#625b87}.category-title{flex-basis:calc(100% - 40px)}
+    @media(max-width:570px){.summary-heading,.categories-heading{padding:11px 12px;border-radius:15px}.category[data-open="true"] .category-title{flex-basis:calc(100% - 40px)}}
   </style>
 </head>
 <body>
@@ -630,7 +633,7 @@ main{max-width:1600px;padding-bottom:42px}.month-section{max-width:none;position
         });
         const fields=document.createElement('div');fields.className='category-fields';
         for(const item of category.items)if(visible(item))addItem(item,itemIndex++,fields);
-        head.append(title,edit,plus,renameForm);card.append(head,form,fields);outer.append(card);
+        head.append(title,plus,renameForm);card.append(head,form,fields);outer.append(card);
       }
       renderTotal();
     }
@@ -780,7 +783,7 @@ let total=0n;
     window.addEventListener('pageshow',checkDate);
   };
   </script>
-<script type="module" src="./cloud-sync.js"></script>
+<script type="module" src="./cloud-sync.js?v=20261103-portada-2"></script>
 </body>
 </html>
 
